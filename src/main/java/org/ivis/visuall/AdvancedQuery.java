@@ -37,7 +37,7 @@ public class AdvancedQuery {
         ArrayList<Relationship> edges = new ArrayList<>();
         for (Relationship r : n.getRelationships()) {
             edges.add(r);
-            
+            nodes.add(r.getEndNode());
         }
 
         return Stream.of(new Output(nodes, edges));
