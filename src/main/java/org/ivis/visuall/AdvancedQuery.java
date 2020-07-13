@@ -2,9 +2,11 @@ package org.ivis.visuall;
 
 import java.util.ArrayList;
 import java.util.Queue;
+import java.util.Set;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.stream.Stream;
 
 import org.neo4j.procedure.Context;
@@ -36,12 +38,12 @@ public class AdvancedQuery {
     @Description("From specified nodes forms a minimal graph of interest")
     public Stream<Output> graphOfInterest(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
             @Name("lengthLimit") Long lengthLimit, @Name("isDirected") Boolean isDirected) {
-        ArrayList<Node> nodes = new ArrayList<>();
+        HashSet<Node> nodes = new HashSet<>();
 
         Node n = this.db.getNodeById(1);
         nodes.add(n);
 
-        ArrayList<Relationship> edges = new ArrayList<>();
+        HashSet<Relationship> edges = new HashSet<>();
         for (Relationship r : n.getRelationships()) {
             edges.add(r);
             nodes.add(r.getEndNode());
@@ -50,14 +52,15 @@ public class AdvancedQuery {
         if (isDirected) {
             d = Direction.OUTGOING;
         }
-        this.GoI_BFS(ids, ignoredTypes, lengthLimit, d);
+        this.GoI_BFS(new HashSet<>(ids), ignoredTypes, lengthLimit, d);
 
         return Stream.of(new Output(nodes, edges));
     }
 
     // ids: a list of node ids
-    private ArrayList<String> GoI_BFS(List<Long> ids, List<String> ignoredTypes, Long lengthLimit,
-            Direction d) {
+    private Output GoI_BFS(HashSet<Long> ids, List<String> ignoredTypes, Long lengthLimit, Direction dir) {
+        Output oup = new Output(new HashSet<Node>(), new HashSet<Relationship>());
+
         // used to store label values of graph elements
         HashMap<Long, LabelData> tmpNodes = new HashMap<>();
         HashMap<Long, LabelData> tmpEdges = new HashMap<>();
@@ -83,31 +86,61 @@ public class AdvancedQuery {
 
         while (!queue.isEmpty()) {
             long n1 = queue.remove();
-            Iterable<Relationship> edges = this.db.getNodeById(n1).getRelationships(d, allowedEdgeTypesArr);
+            Iterable<Relationship> edges = this.db.getNodeById(n1).getRelationships(dir, allowedEdgeTypesArr);
             for (Relationship e : edges) {
-                if (d == Direction.OUTGOING) {
-                    String edgeId = "e" + e.getId();
-                    LabelData elem = tmp.get(edgeId);
-                    if (elem == null) {
-                        tmp.put(edgeId, new LabelData(labelFwd, labelRev))
-                    }
-                } else if (d == Direction.INCOMING) {
+                long edgeId = e.getId();
+                LabelData labelE = tmpEdges.get(edgeId);
+                if (labelE == null) {
+                    labelE = new LabelData(0, 0);
+                }
+                LabelData labelN1 = tmpNodes.get(n1);
+                if (labelN1 == null) {
+                    labelN1 = new LabelData(0, 0);
+                }
+                if (dir == Direction.OUTGOING) {
+                    labelE.fwd = labelN1.fwd + 1;
+                } else if (dir == Direction.INCOMING) {
+                    labelE.rev = labelN1.rev;
+                } else if (dir == Direction.BOTH) {
+                    labelE.fwd = labelN1.fwd + 1;
+                    labelE.rev = labelN1.rev;
+                }
+                tmpEdges.put(edgeId, labelE);
+                tmpNodes.put(n1, labelN1);
 
+                Node n2 = e.getEndNode();
+                oup.nodes.add(n2);
+                oup.edges.add(e);
+                LabelData labelN2 = tmpNodes.get(n2.getId());
+                if (labelN2 == null) {
+                    labelN2 = new LabelData(0, 0);
+                }
+                Direction[] directions = { Direction.OUTGOING };
+                if (dir == Direction.INCOMING) {
+                    directions[0] = Direction.INCOMING;
+                } else if (dir == Direction.BOTH) {
+                    directions = new Direction[] { Direction.INCOMING, Direction.OUTGOING };
+                }
+                for (Direction d : directions) {
+                    if (labelN2.getLabel(d) > labelN1.getLabel(d) + 1) {
+                        labelN2.setLabel(labelN1.getLabel(d) + 1, d);
+                        Long n2Id = n2.getId();
+                        tmpNodes.put(n2Id, labelN2);
+                        if (labelN2.getLabel(d) < lengthLimit && !ids.contains(n2Id)) {
+                            queue.add(n2Id);
+                        }
+                    }
                 }
             }
         }
-
-        ArrayList<String> r = new ArrayList<>();
-
-        return r;
-
+        return oup;
     }
 
     public class Output {
-        public List<Node> nodes;
-        public List<Relationship> edges;
+        public Set<Node> nodes;
+        public Set<Relationship> edges;
 
-        Output(List<Node> nodes, List<Relationship> edges) {
+        Output(Set<Node> nodes, Set<Relationship> edges) {
             this.nodes = nodes;
             this.edges = edges;
         }
@@ -120,6 +153,24 @@ public class AdvancedQuery {
         LabelData(int fwd, int rev) {
             this.fwd = fwd;
             this.rev = rev;
+        }
+
+        public void setLabel(int val, Direction dir) {
+            if (dir == Direction.INCOMING) {
+                this.rev = val;
+            } else if (dir == Direction.OUTGOING) {
+                this.fwd = val;
+            }
+        }
+
+        public int getLabel(Direction dir) {
+            if (dir == Direction.INCOMING) {
+                return this.rev;
+            }
+            if (dir == Direction.OUTGOING) {
+                return this.fwd;
+            }
+            return -1;
         }
     }
 
