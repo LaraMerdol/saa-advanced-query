@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Queue;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.stream.Stream;
@@ -20,6 +21,7 @@ import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.ResourceIterable;
+import org.neo4j.graphdb.Result;
 import org.neo4j.logging.Log;
 import org.neo4j.graphdb.Direction;
 
@@ -37,7 +39,7 @@ public class AdvancedQuery {
     @Procedure(value = "graphOfInterest", mode = Mode.WRITE)
     @Description("From specified nodes forms a minimal graph of interest")
     public Stream<Output> graphOfInterest(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-            @Name("lengthLimit") Long lengthLimit, @Name("isDirected") Boolean isDirected) {
+            @Name("lengthLimit") long lengthLimit, @Name("direction") int direction) {
         HashSet<Node> nodes = new HashSet<>();
 
         Node n = this.db.getNodeById(1);
@@ -48,17 +50,22 @@ public class AdvancedQuery {
             edges.add(r);
             nodes.add(r.getEndNode());
         }
-        Direction d = Direction.BOTH;
-        if (isDirected) {
-            d = Direction.OUTGOING;
-        }
-        this.GoI_BFS(new HashSet<>(ids), ignoredTypes, lengthLimit, d);
 
-        return Stream.of(new Output(new ArrayList<Node>(nodes), new ArrayList<Relationship>(edges)));
+        // 0: OUTGOING, 1: INCOMING, 2: BOTH
+        Direction d = Direction.BOTH;
+        if (direction == 0) {
+            d = Direction.OUTGOING;
+        } else if (direction == 1) {
+            d = Direction.INCOMING;
+        }
+
+        Output o = this.GoI_BFS(new HashSet<>(ids), ignoredTypes, lengthLimit, d);
+        o = this.purify(ids, o, lengthLimit);
+        return Stream.of(o);
     }
 
     // ids: a list of node ids
-    private Output GoI_BFS(HashSet<Long> ids, List<String> ignoredTypes, Long lengthLimit, Direction dir) {
+    private Output GoI_BFS(HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir) {
 
         HashSet<Node> nodeSet = new HashSet<Node>();
         HashSet<Relationship> edgeSet = new HashSet<Relationship>();
@@ -149,6 +156,32 @@ public class AdvancedQuery {
             }
         }
         return false;
+    }
+
+    private Output purify(List<Long> ids, Output elems, long lengthLimit) {
+        String cql = "MATCH p=(a)-[*0.." + lengthLimit
+                + "]-(b) WHERE ID(a) IN {ids} AND b IN {ids} RETURN RELATIONSHIPS(p) as rels, NODES(p) as nodes";
+
+        HashMap<String, Object> cqlParams = new HashMap<String, Object>();
+        cqlParams.put("ids", ids);
+
+        Result result = this.db.execute(cql, cqlParams);
+
+        Output r = new Output(new ArrayList<Node>(), new ArrayList<Relationship>());
+
+        while (result.hasNext()) {
+            Map<String, Object> row = result.next();
+            List<Node> nodes = (List<Node>) row.get("nodes");
+            if (nodes != null) {
+                r.nodes.addAll(nodes);
+            }
+            List<Relationship> edges = (List<Relationship>) row.get("rels");
+
+            if (edges != null) {
+                r.edges.addAll(edges);
+            }
+        }
+        return r;
     }
 
     public class Output {
