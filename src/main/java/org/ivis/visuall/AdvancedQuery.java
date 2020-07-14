@@ -2,7 +2,6 @@ package org.ivis.visuall;
 
 import java.util.ArrayList;
 import java.util.Queue;
-import java.util.Set;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.HashMap;
@@ -16,6 +15,7 @@ import org.neo4j.procedure.Mode;
 import org.neo4j.procedure.Name;
 
 import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.RelationshipType;
@@ -54,13 +54,14 @@ public class AdvancedQuery {
         }
         this.GoI_BFS(new HashSet<>(ids), ignoredTypes, lengthLimit, d);
 
-        return Stream.of(new Output(nodes, edges));
+        return Stream.of(new Output(new ArrayList<Node>(nodes), new ArrayList<Relationship>(edges)));
     }
 
     // ids: a list of node ids
     private Output GoI_BFS(HashSet<Long> ids, List<String> ignoredTypes, Long lengthLimit, Direction dir) {
-        Output oup = new Output(new HashSet<Node>(), new HashSet<Relationship>());
 
+        HashSet<Node> nodeSet = new HashSet<Node>();
+        HashSet<Relationship> edgeSet = new HashSet<Relationship>();
         // used to store label values of graph elements
         HashMap<Long, LabelData> tmpNodes = new HashMap<>();
         HashMap<Long, LabelData> tmpEdges = new HashMap<>();
@@ -75,8 +76,9 @@ public class AdvancedQuery {
         // prepare the edge types and direction
         ArrayList<RelationshipType> allowedEdgeTypes = new ArrayList<>();
         ResourceIterable<RelationshipType> allEdgeTypes = this.db.getAllRelationshipTypes();
+        ignoredTypes.replaceAll(String::toLowerCase);
         for (RelationshipType r : allEdgeTypes) {
-            String name = r.name();
+            String name = r.name().toLowerCase();
             if (!ignoredTypes.contains(name)) {
                 allowedEdgeTypes.add(r);
             }
@@ -89,6 +91,10 @@ public class AdvancedQuery {
             Iterable<Relationship> edges = this.db.getNodeById(n1).getRelationships(dir, allowedEdgeTypesArr);
             for (Relationship e : edges) {
                 long edgeId = e.getId();
+                Node n2 = e.getEndNode();
+                if (this.isNodeIgnored(n2, ignoredTypes)) {
+                    continue;
+                }
                 LabelData labelE = tmpEdges.get(edgeId);
                 if (labelE == null) {
                     labelE = new LabelData(0, 0);
@@ -108,9 +114,8 @@ public class AdvancedQuery {
                 tmpEdges.put(edgeId, labelE);
                 tmpNodes.put(n1, labelN1);
 
-                Node n2 = e.getEndNode();
-                oup.nodes.add(n2);
-                oup.edges.add(e);
+                nodeSet.add(n2);
+                edgeSet.add(e);
                 LabelData labelN2 = tmpNodes.get(n2.getId());
                 if (labelN2 == null) {
                     labelN2 = new LabelData(0, 0);
@@ -133,14 +138,24 @@ public class AdvancedQuery {
                 }
             }
         }
-        return oup;
+        return new Output(new ArrayList<Node>(nodeSet), new ArrayList<Relationship>(edgeSet));
+    }
+
+    private boolean isNodeIgnored(Node n, List<String> ignoredTypes) {
+        ignoredTypes.replaceAll(String::toLowerCase);
+        for (Label l : n.getLabels()) {
+            if (ignoredTypes.contains(l.name().toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public class Output {
-        public Set<Node> nodes;
-        public Set<Relationship> edges;
+        public List<Node> nodes;
+        public List<Relationship> edges;
 
-        Output(Set<Node> nodes, Set<Relationship> edges) {
+        Output(List<Node> nodes, List<Relationship> edges) {
             this.nodes = nodes;
             this.edges = edges;
         }
