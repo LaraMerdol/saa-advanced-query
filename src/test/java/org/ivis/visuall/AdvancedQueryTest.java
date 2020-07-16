@@ -6,6 +6,7 @@ import org.junit.jupiter.api.TestInstance;
 import org.neo4j.driver.v1.Config;
 import org.neo4j.driver.v1.Driver;
 import org.neo4j.driver.v1.GraphDatabase;
+import org.neo4j.driver.v1.Record;
 import org.neo4j.driver.v1.Session;
 import org.neo4j.harness.ServerControls;
 import org.neo4j.harness.TestServerBuilders;
@@ -49,8 +50,35 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL graphOfInterest([1,2,3], [], 1, false) YIELD nodes, edges return nodes, edges");
+                    .run("CALL graphOfInterest([1,2,3], [], 1, 1) YIELD nodes, edges return nodes, edges");
             assertThat(result.single().get("nodeId").asLong()).isEqualTo(0);
+
+        }
+    }
+
+    @Test
+    public void commonTargetTest1() {
+
+        // This is in a try-block, to make sure we close the driver after the test
+        try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+                Session session = driver.session()) {
+            // And given I have a node in the database
+            session.run(
+                    "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
+                            + "CREATE (n6:Person {name:'n6'}) CREATE (n7:Person {name:'n7'}) CREATE (n8:Person {name:'n8'}) CREATE (n9:Person {name:'n9'}) CREATE (n10:Person {name:'n10'})"
+                            + "CREATE (n11:Person {name:'n11'}) CREATE (n12:Person {name:'n12'}) CREATE (n13:Person {name:'n13'})"
+                            + "CREATE (n14:Person {name:'n14'}) CREATE "
+                            + "(n1)-[:KNOWS]->(n6),(n2)-[:KNOWS]->(n7),(n3)-[:KNOWS]->(n8),(n4)-[:KNOWS]->(n9),(n5)-[:KNOWS]->(n10),"
+                            + "(n7)-[:KNOWS]->(n11),(n8)-[:KNOWS]->(n12),(n9)-[:KNOWS]->(n13),"
+                            + "(n11)-[:KNOWS]->(n14),(n12)-[:KNOWS]->(n14),(n13)-[:KNOWS]->(n14);");
+
+            // Then I can search for that node with lucene query syntax
+            StatementResult result = session
+                    .run("CALL commonStream([1,2,3], [], 3, true) YIELD nodes, edges return nodes, edges");
+            
+            System.out.println(result);
+            // assertThat(result.single().get("nodeId").asLong()).isEqualTo(13);
+
 
         }
     }
