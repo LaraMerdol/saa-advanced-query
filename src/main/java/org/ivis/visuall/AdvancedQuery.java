@@ -36,6 +36,12 @@ public class AdvancedQuery {
     @Context
     public Log log;
 
+    
+    /** 
+     * @param ids
+     * @param @Name("ignoredTypes"
+     * @return Stream<Output>
+     */
     @Procedure(value = "graphOfInterest", mode = Mode.WRITE)
     @Description("From specified nodes forms a minimal graph of interest")
     public Stream<Output> graphOfInterest(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
@@ -51,73 +57,79 @@ public class AdvancedQuery {
             nodes.add(r.getEndNode());
         }
 
-        // 0: OUTGOING, 1: INCOMING, 2: BOTH
-        Direction d = Direction.BOTH;
-        if (direction == 0) {
-            d = Direction.OUTGOING;
-        } else if (direction == 1) {
-            d = Direction.INCOMING;
-        }
+        Direction d = this.num2Dir(direction);
 
         Output o = this.GoI_BFS(new HashSet<>(ids), ignoredTypes, lengthLimit, d);
         o = this.purify(ids, o, lengthLimit);
         return Stream.of(o);
     }
 
+    
+    /** 
+     * @param ids
+     * @param @Name("ignoredTypes"
+     * @return Stream<Output>
+     */
     @Procedure(value = "commonStream", mode = Mode.WRITE)
     @Description("From specified nodes forms founds common upstream/downstream (target/regulator)")
     public Stream<Output> commonStream(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-            @Name("lengthLimit") Long lengthLimit, @Name("isDownstream") Boolean isDownstream) {
+            @Name("lengthLimit") Long lengthLimit, @Name("direction") long direction) {
 
-        try {
-            Output oup = new Output(new ArrayList<Node>(), new ArrayList<Relationship>());
+        Output oup = new Output(new ArrayList<Node>(), new ArrayList<Relationship>());
 
-            HashSet<Long> candidates = new HashSet<>();
-            HashMap<Long, Integer> node2Reached = new HashMap<>();
-            for (long id : ids) {
-                candidates.addAll(this.BFS(node2Reached, id, ignoredTypes, lengthLimit, isDownstream));
+        HashSet<Long> candidates = new HashSet<>();
+        HashMap<Long, Integer> node2Reached = new HashMap<>();
+        Direction d = this.num2Dir(direction);
+        for (long id : ids) {
+            candidates.addAll(this.BFS(node2Reached, id, ignoredTypes, lengthLimit, d));
+        }
+        int size = ids.size();
+        for (long id : candidates) {
+            Integer i = node2Reached.get(id);
+            if (i != null && i == size) {
+                oup.nodes.add(this.db.getNodeById(id));
             }
-            int size = ids.size();
-            for (long id : candidates) {
-                if (node2Reached.get(id) == size) {
-                    oup.nodes.add(this.db.getNodeById(id));
-                }
-            }
-
-            return Stream.of(oup);
-        } catch (Exception e) {
-            return Stream.of(new Output(new ArrayList<Node>(), new ArrayList<Relationship>()));
         }
 
+        return Stream.of(oup);
     }
 
+    
+    /** 
+     * @param node2Reached
+     * @param nodeId
+     * @param ignoredTypes
+     * @param depthLimit
+     * @param dir
+     * @return HashSet<Long>
+     */
     private HashSet<Long> BFS(HashMap<Long, Integer> node2Reached, long nodeId, List<String> ignoredTypes,
-            long depthLimit, boolean isDownstream) {
+            long depthLimit, Direction dir) {
         HashSet<Long> visitedNodes = new HashSet<>();
         visitedNodes.add(nodeId);
-        Direction dir = Direction.INCOMING;
-        if (isDownstream) {
-            dir = Direction.OUTGOING;
-        }
 
         Queue<Long> queue = new LinkedList<>();
         queue.add(nodeId);
 
         int currDepth = 0;
-        int numNodesInLevel = 1;
+        int queueSizeBeforeMe = 0;
+        boolean isPendingDepthIncrease = false;
         while (!queue.isEmpty()) {
-            if (currDepth == depthLimit) {
-                continue;
+
+            if (queueSizeBeforeMe == 0) {
+                currDepth++;
+                isPendingDepthIncrease = true;
+            }
+            if (currDepth == depthLimit + 1) {
+                break;
             }
 
             Node curr = this.db.getNodeById(queue.remove());
-            numNodesInLevel--;
-            if (numNodesInLevel == 0) {
-                currDepth++;
-            }
+            queueSizeBeforeMe--;
+
             Iterable<Relationship> edges = curr.getRelationships(dir, this.getValidRelationshipTypes(ignoredTypes));
             for (Relationship e : edges) {
-                Node n = e.getEndNode();
+                Node n = e.getOtherNode(curr);
                 long id = n.getId();
                 if (this.isNodeIgnored(n, ignoredTypes) || visitedNodes.contains(id)) {
                     continue;
@@ -129,12 +141,38 @@ public class AdvancedQuery {
                 }
                 node2Reached.put(id, cnt + 1);
                 visitedNodes.add(id);
+                if (isPendingDepthIncrease) {
+                    queueSizeBeforeMe = queue.size();
+                    isPendingDepthIncrease = false;
+                }
+
                 queue.add(id);
             }
         }
         return visitedNodes;
     }
 
+    
+    /** map number to direction, 0: OUTGOING (downstream), 1: INCOMING (upstream), 2: BOTH
+     * @param n
+     * @return Direction
+     */
+    private Direction num2Dir(long n) {
+        
+        Direction d = Direction.BOTH;
+        if (n == 0) {
+            d = Direction.OUTGOING; // means downstream
+        } else if (n == 1) {
+            d = Direction.INCOMING; // means upstream
+        }
+        return d;
+    }
+
+    
+    /** 
+     * @param ignoredTypes
+     * @return RelationshipType[]
+     */
     private RelationshipType[] getValidRelationshipTypes(List<String> ignoredTypes) {
         // prepare the edge types and direction
         ArrayList<RelationshipType> allowedEdgeTypes = new ArrayList<>();
@@ -150,6 +188,14 @@ public class AdvancedQuery {
 
     }
 
+    
+    /** 
+     * @param ids
+     * @param ignoredTypes
+     * @param lengthLimit
+     * @param dir
+     * @return Output
+     */
     // ids: a list of node ids
     private Output GoI_BFS(HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir) {
 
@@ -173,7 +219,7 @@ public class AdvancedQuery {
             Iterable<Relationship> edges = this.db.getNodeById(n1).getRelationships(dir, allowedEdgeTypesArr);
             for (Relationship e : edges) {
                 long edgeId = e.getId();
-                Node n2 = e.getEndNode();
+                Node n2 = e.getOtherNode(this.db.getNodeById(n1));
                 if (this.isNodeIgnored(n2, ignoredTypes)) {
                     continue;
                 }
@@ -223,6 +269,12 @@ public class AdvancedQuery {
         return new Output(new ArrayList<Node>(nodeSet), new ArrayList<Relationship>(edgeSet));
     }
 
+    
+    /** 
+     * @param n
+     * @param ignoredTypes
+     * @return boolean
+     */
     private boolean isNodeIgnored(Node n, List<String> ignoredTypes) {
         ignoredTypes.replaceAll(String::toLowerCase);
         for (Label l : n.getLabels()) {
@@ -233,6 +285,13 @@ public class AdvancedQuery {
         return false;
     }
 
+    
+    /** 
+     * @param ids
+     * @param elems
+     * @param lengthLimit
+     * @return Output
+     */
     private Output purify(List<Long> ids, Output elems, long lengthLimit) {
         String cql = "MATCH p=(a)-[*0.." + lengthLimit
                 + "]-(b) WHERE ID(a) IN {ids} AND b IN {ids} RETURN RELATIONSHIPS(p) as rels, NODES(p) as nodes";
