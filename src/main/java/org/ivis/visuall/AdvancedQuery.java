@@ -43,31 +43,36 @@ public class AdvancedQuery {
     @Description("From specified nodes forms a minimal graph of interest")
     public Stream<Output> graphOfInterest(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
             @Name("lengthLimit") long lengthLimit, @Name("direction") long direction) {
-        HashSet<Node> nodes = new HashSet<>();
-
-        Node n = this.db.getNodeById(1);
-        nodes.add(n);
-
-        HashSet<Relationship> edges = new HashSet<>();
-        for (Relationship r : n.getRelationships()) {
-            edges.add(r);
-            nodes.add(r.getEndNode());
-        }
-
         Direction d = this.num2Dir(direction);
 
         HashSet<Long> idSet = new HashSet<>(ids);
-        BFSOutput o1 = this.GoI_BFS(idSet, ignoredTypes, lengthLimit, Direction.INCOMING, d != Direction.BOTH);
-        BFSOutput o2 = this.GoI_BFS(idSet, ignoredTypes, lengthLimit, Direction.OUTGOING, d != Direction.BOTH);
+        HashMap<Long, LabelData> edgeLabels = new HashMap<>();
+        HashMap<Long, LabelData> nodeLabels = new HashMap<>();
+        BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.INCOMING,
+                d != Direction.BOTH);
+        BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.OUTGOING,
+                d != Direction.BOTH);
         o1.edges.addAll(o2.edges);
         o1.nodes.addAll(o2.nodes);
 
-        o1 = this.purify(idSet, o1);
+        BFSOutput r = new BFSOutput(new HashSet<Long>(), new HashSet<Long>());
+        for (long edgeId : o1.edges) {
+            if (edgeLabels.get(edgeId).fwd + edgeLabels.get(edgeId).rev <= lengthLimit) {
+                r.edges.add(edgeId);
+            }
+        }
+        for (long nodeId : o1.nodes) {
+            if (nodeLabels.get(nodeId).fwd + nodeLabels.get(nodeId).rev <= lengthLimit) {
+                r.nodes.add(nodeId);
+            }
+        }
+
+        r = this.purify(idSet, r);
         Output o = new Output(new ArrayList<Node>(), new ArrayList<Relationship>());
-        for (Long nodeId : o1.nodes) {
+        for (Long nodeId : r.nodes) {
             o.nodes.add(this.db.getNodeById(nodeId));
         }
-        for (Long edgeId : o1.edges) {
+        for (Long edgeId : r.edges) {
             o.edges.add(this.db.getRelationshipById(edgeId));
         }
         return Stream.of(o);
@@ -204,20 +209,17 @@ public class AdvancedQuery {
      * @return Output
      */
     // ids: a list of node ids
-    private BFSOutput GoI_BFS(HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir,
-            boolean isDirected) {
+    private BFSOutput GoI_BFS(HashMap<Long, LabelData> nodeLabels, HashMap<Long, LabelData> edgeLabels,
+            HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir, boolean isDirected) {
 
         HashSet<Long> nodeSet = new HashSet<Long>();
         HashSet<Long> edgeSet = new HashSet<Long>();
-        // used to store label values of graph elements
-        HashMap<Long, LabelData> tmpNodes = new HashMap<>();
-        HashMap<Long, LabelData> tmpEdges = new HashMap<>();
 
         // prepare queue
         Queue<Long> queue = new LinkedList<>();
         for (Long id : ids) {
             queue.add(id);
-            tmpNodes.put(id, new LabelData(0, 0));
+            nodeLabels.put(id, new LabelData(0, 0));
         }
 
         RelationshipType[] allowedEdgeTypesArr = getValidRelationshipTypes(ignoredTypes);
@@ -235,11 +237,11 @@ public class AdvancedQuery {
                 if (this.isNodeIgnored(n2, ignoredTypes)) {
                     continue;
                 }
-                LabelData labelE = tmpEdges.get(edgeId);
+                LabelData labelE = edgeLabels.get(edgeId);
                 if (labelE == null) {
                     labelE = new LabelData(0, 0);
                 }
-                LabelData labelN1 = tmpNodes.get(n1);
+                LabelData labelN1 = nodeLabels.get(n1);
                 if (labelN1 == null) {
                     labelN1 = new LabelData(0, 0);
                 }
@@ -248,20 +250,20 @@ public class AdvancedQuery {
                 } else if (dir == Direction.INCOMING) {
                     labelE.rev = labelN1.rev;
                 }
-                tmpEdges.put(edgeId, labelE);
-                tmpNodes.put(n1, labelN1);
+                edgeLabels.put(edgeId, labelE);
+                nodeLabels.put(n1, labelN1);
 
-                nodeSet.add(n2.getId());
+                long n2Id = n2.getId();
+                nodeSet.add(n2Id);
                 edgeSet.add(edgeId);
-                LabelData labelN2 = tmpNodes.get(n2.getId());
+                LabelData labelN2 = nodeLabels.get(n2Id);
                 if (labelN2 == null) {
                     labelN2 = new LabelData(0, 0);
                 }
 
                 if (labelN2.getLabel(dir) > labelN1.getLabel(dir) + 1) {
                     labelN2.setLabel(labelN1.getLabel(dir) + 1, dir);
-                    Long n2Id = n2.getId();
-                    tmpNodes.put(n2Id, labelN2);
+                    nodeLabels.put(n2Id, labelN2);
                     if (labelN2.getLabel(dir) < lengthLimit && !ids.contains(n2Id)) {
                         queue.add(n2Id);
                     }
@@ -286,7 +288,10 @@ public class AdvancedQuery {
         return false;
     }
 
-    /** chops all the degree-1 nodes iteratively, returns a graph where each node is at least degree-2 or inside the list of srcIds
+    /**
+     * chops all the degree-1 nodes iteratively, returns a graph where each node is
+     * at least degree-2 or inside the list of srcIds
+     * 
      * @param srcIds
      * @param elems
      * @param lengthLimit
@@ -327,6 +332,8 @@ public class AdvancedQuery {
                 long relatedEdge = node2edge.get(nodeId);
                 elems.edges.remove(relatedEdge);
 
+                // decrement the degree of other node (node on the otherhand of currently
+                // deleted degree-1 node)
                 Long otherNodeId = node2node.get(nodeId);
                 node2degree.put(otherNodeId, node2degree.get(otherNodeId) - 1);
             }
