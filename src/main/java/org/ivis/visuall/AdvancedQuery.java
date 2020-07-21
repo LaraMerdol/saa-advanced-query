@@ -48,9 +48,13 @@ public class AdvancedQuery {
         HashSet<Long> idSet = new HashSet<>(ids);
         HashMap<Long, LabelData> edgeLabels = new HashMap<>();
         HashMap<Long, LabelData> nodeLabels = new HashMap<>();
-        BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.INCOMING,
+        for (Long id : ids) {
+            nodeLabels.put(id, new LabelData(0, 0));
+        }
+
+        BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.OUTGOING,
                 d != Direction.BOTH);
-        BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.OUTGOING,
+        BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.INCOMING,
                 d != Direction.BOTH);
         o1.edges.addAll(o2.edges);
         o1.nodes.addAll(o2.nodes);
@@ -66,8 +70,8 @@ public class AdvancedQuery {
                 r.nodes.add(nodeId);
             }
         }
-
         r = this.purify(idSet, r);
+        r = this.removeNodelessEdges(r);
         Output o = new Output(new ArrayList<Node>(), new ArrayList<Relationship>());
         for (Long nodeId : r.nodes) {
             o.nodes.add(this.db.getNodeById(nodeId));
@@ -202,30 +206,29 @@ public class AdvancedQuery {
     }
 
     /**
-     * @param ids
+     * @param ids          a list of node ids
      * @param ignoredTypes
      * @param lengthLimit
      * @param dir          should be INCOMING or OUTGOING
      * @return Output
      */
-    // ids: a list of node ids
     private BFSOutput GoI_BFS(HashMap<Long, LabelData> nodeLabels, HashMap<Long, LabelData> edgeLabels,
             HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir, boolean isDirected) {
-
         HashSet<Long> nodeSet = new HashSet<Long>();
         HashSet<Long> edgeSet = new HashSet<Long>();
+        HashSet<Long> visitedNodes = new HashSet<Long>();
 
         // prepare queue
         Queue<Long> queue = new LinkedList<>();
         for (Long id : ids) {
             queue.add(id);
-            nodeLabels.put(id, new LabelData(0, 0));
         }
-
+        
         RelationshipType[] allowedEdgeTypesArr = getValidRelationshipTypes(ignoredTypes);
 
         while (!queue.isEmpty()) {
             long n1 = queue.remove();
+            visitedNodes.add(n1);
             Direction d = dir;
             if (!isDirected) {
                 d = Direction.BOTH;
@@ -234,16 +237,17 @@ public class AdvancedQuery {
             for (Relationship e : edges) {
                 long edgeId = e.getId();
                 Node n2 = e.getOtherNode(this.db.getNodeById(n1));
-                if (this.isNodeIgnored(n2, ignoredTypes)) {
+                long n2Id = n2.getId();
+                if (this.isNodeIgnored(n2, ignoredTypes) || visitedNodes.contains(n2Id)) {
                     continue;
                 }
                 LabelData labelE = edgeLabels.get(edgeId);
                 if (labelE == null) {
-                    labelE = new LabelData(0, 0);
+                    labelE = new LabelData();
                 }
                 LabelData labelN1 = nodeLabels.get(n1);
                 if (labelN1 == null) {
-                    labelN1 = new LabelData(0, 0);
+                    labelN1 = new LabelData();
                 }
                 if (dir == Direction.OUTGOING) {
                     labelE.fwd = labelN1.fwd + 1;
@@ -253,14 +257,13 @@ public class AdvancedQuery {
                 edgeLabels.put(edgeId, labelE);
                 nodeLabels.put(n1, labelN1);
 
-                long n2Id = n2.getId();
                 nodeSet.add(n2Id);
                 edgeSet.add(edgeId);
                 LabelData labelN2 = nodeLabels.get(n2Id);
                 if (labelN2 == null) {
-                    labelN2 = new LabelData(0, 0);
+                    labelN2 = new LabelData();
                 }
-
+                nodeLabels.put(n2Id, labelN2);
                 if (labelN2.getLabel(dir) > labelN1.getLabel(dir) + 1) {
                     labelN2.setLabel(labelN1.getLabel(dir) + 1, dir);
                     nodeLabels.put(n2Id, labelN2);
@@ -298,28 +301,29 @@ public class AdvancedQuery {
      * @return Output
      */
     private BFSOutput purify(HashSet<Long> srcIds, BFSOutput elems) {
-
         HashMap<Long, Long> node2degree = new HashMap<>();
-        HashMap<Long, Long> node2edge = new HashMap<>();
-        HashMap<Long, Long> node2node = new HashMap<>();
+        HashMap<Long, HashSet<Long>> node2edge = new HashMap<>();
+        HashMap<Long, HashSet<Long>> node2node = new HashMap<>();
+        elems.nodes.addAll(srcIds);
         for (long edgeId : elems.edges) {
             Relationship r = this.db.getRelationshipById(edgeId);
             long id1 = r.getStartNodeId();
             long id2 = r.getEndNodeId();
             Long v1 = node2degree.get(id1);
             Long v2 = node2degree.get(id2);
-            if (v1 != null) {
+            if (v1 == null) {
                 v1 = new Long(0);
             }
             node2degree.put(id1, v1 + 1);
-            if (v2 != null) {
+            if (v2 == null) {
                 v2 = new Long(0);
             }
             node2degree.put(id2, v2 + 1);
-            node2edge.put(id1, edgeId);
-            node2edge.put(id2, edgeId);
-            node2node.put(id1, id2);
-            node2node.put(id2, id1);
+
+            this.insert2AdjList(node2edge, id1, edgeId);
+            this.insert2AdjList(node2edge, id2, edgeId);
+            this.insert2AdjList(node2node, id1, id2);
+            this.insert2AdjList(node2node, id2, id1);
         }
 
         HashSet<Long> degree1Nodes = this.getDegree1Nodes(node2degree, srcIds);
@@ -329,19 +333,44 @@ public class AdvancedQuery {
                 node2degree.remove(nodeId);
                 elems.nodes.remove(nodeId);
 
-                long relatedEdge = node2edge.get(nodeId);
-                elems.edges.remove(relatedEdge);
+                HashSet<Long> relatedEdges = node2edge.get(nodeId);
+                elems.edges.removeAll(relatedEdges);
 
                 // decrement the degree of other node (node on the otherhand of currently
                 // deleted degree-1 node)
-                Long otherNodeId = node2node.get(nodeId);
-                node2degree.put(otherNodeId, node2degree.get(otherNodeId) - 1);
+                HashSet<Long> otherNodeIds = node2node.get(nodeId);
+                for (long id : otherNodeIds) {
+                    node2degree.put(id, node2degree.get(id) - 1);
+                }
             }
 
             degree1Nodes = this.getDegree1Nodes(node2degree, srcIds);
         }
 
         return elems;
+    }
+
+    private void insert2AdjList(HashMap<Long, HashSet<Long>> map, long key, long val) {
+        HashSet<Long> set = map.get(key);
+        if (set == null) {
+            set = new HashSet<>();
+        }
+        set.add(val);
+        map.put(key, set);
+    }
+
+    private BFSOutput removeNodelessEdges(BFSOutput elems) {
+        BFSOutput result = new BFSOutput(elems.nodes, new HashSet<Long>());
+
+        for (long edgeId : elems.edges) {
+            Relationship r = this.db.getRelationshipById(edgeId);
+            long s = r.getStartNodeId();
+            long e = r.getEndNodeId();
+            if (elems.nodes.contains(s) && elems.nodes.contains(e)) {
+                result.edges.add(edgeId);
+            }
+        }
+        return result;
     }
 
     private HashSet<Long> getDegree1Nodes(HashMap<Long, Long> node2degree, HashSet<Long> srcIds) {
@@ -391,6 +420,11 @@ public class AdvancedQuery {
         LabelData(int fwd, int rev) {
             this.fwd = fwd;
             this.rev = rev;
+        }
+
+        LabelData() {
+            this.fwd = Integer.MAX_VALUE;
+            this.rev = Integer.MAX_VALUE;
         }
 
         public void setLabel(int val, Direction dir) {

@@ -4,10 +4,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.neo4j.driver.internal.InternalNode;
+import org.neo4j.driver.internal.InternalRelationship;
 import org.neo4j.driver.v1.AuthTokens;
 import org.neo4j.driver.v1.Config;
 import org.neo4j.driver.v1.Driver;
 import org.neo4j.driver.v1.GraphDatabase;
+import org.neo4j.driver.v1.Record;
 import org.neo4j.driver.v1.Session;
 import org.neo4j.harness.ServerControls;
 import org.neo4j.harness.TestServerBuilders;
@@ -15,6 +17,7 @@ import org.neo4j.driver.v1.StatementResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -30,7 +33,8 @@ public class AdvancedQueryTest {
             + "CREATE (RET:P{n:'RET'}) CREATE (SRC:P{n:'SRC'}) CREATE (DAB2:P{n:'DAB2'}) CREATE (SMAD2:P{n:'SMAD2'}) CREATE (NEDD9:P{n:'NEDD9'})"
             + "CREATE (EPHA3)-[:R]->(CRK), (EPS15)-[:R]->(CRK), (P140)-[:R]->(CRK), "
             + "(MAP4K1)-[:R]->(CRKL), (MAP4K1)-[:R]->(CRK), (EPHB3)-[:R]->(CRK), "
-            + "(CRKL)-[:R]->(MAP4K5), (CRKL)-[:R]->(PDGFRA), (MAP4K5)-[:R]->(CRK), (MAP4K5)-[:R]->(GRB2), (CRK)-[:R]->(PDGFRA), (CRK)-[:R]->(SOS1), (CRK)-[:R]->(RAPGEP), (CRK)-[:R]->(GRB2), (CRK)-[:R]->(PTK2), (CRK)-[:R]->(CBLC), (CRK)-[:R]->(PDGFRB),"
+            + "(CRKL)-[:R]->(MAP4K5), (CRKL)-[:R]->(PDGFRA), (MAP4K5)-[:R]->(CRK), (MAP4K5)-[:R]->(GRB2), (CRK)-[:R]->(PDGFRA), (CRK)-[:R]->(SOS1), (CRK)-[:R]->(RAPGEP), "
+            + "(CRK)-[:R]->(GRB2), (CRK)-[:R]->(PTK2), (CRK)-[:R]->(CBLC), (CRK)-[:R]->(PDGFRB), (PDGFRB)-[:R]->(GRB2),"
             + "(PDGFRA)-[:R]->(RAPGEP), (SOS1)-[:R]->(MUC1), (SOS1)-[:R]->(GRB2), (GRB2)-[:R]->(RAPGEP), (GRB2)-[:R]->(CBLC), (GRB2)-[:R]->(PTK2),"
             + "(GRB7)-[:R]->(RET), (GRB7)-[:R]->(ERBB2), (ERBB2)-[:R]->(SRC), (ERBB2)-[:R]->(MUC1), (MUC1)-[:R]->(SRC), (RAPGEP)-[:R]->(NEDD9), (PTK2)-[:R]->(NEDD9),"
             + "(RET)-[:R]->(SRC), (SRC)-[:R]->(DAB2), (DAB2)-[:R]->(SMAD2), (SMAD2)-[:R]->(NEDD9);";
@@ -43,7 +47,7 @@ public class AdvancedQueryTest {
 
     // Figure 11 in paper
     @Test
-    public void shouldAllowIndexingAndFindingANode() {
+    public void GoIGiveEmpty4Length1() {
 
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
                 Session session = driver.session()) {
@@ -52,15 +56,128 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 1, 1) YIELD nodes, edges return nodes, edges");
+                    .run("CALL graphOfInterest([5,7], [], 1, 2) YIELD nodes, edges return nodes, edges");
 
-            Set<Long> nodeSet = result.single().get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
-            Set<Long> edgeSet = result.single().get("edges").asList().stream().map(x -> ((InternalNode) x).id())
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
                     .collect(Collectors.toSet());
-            assertThat(nodeSet.contains(5)).isEqualTo(0);
-            assertThat(edgeSet.contains(5)).isEqualTo(0);
 
+            ArrayList<Long> trueNodeSet = new ArrayList<Long>();
+            trueNodeSet.add(new Long(5));
+            trueNodeSet.add(new Long(7));
+
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.size()).isEqualTo(0);
+        }
+    }
+
+    @Test
+    public void GoIForLength2() {
+
+        try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+                Session session = driver.session()) {
+            // And given I have a node in the database
+            session.run(AdvancedQueryTest.paperFig11Graph);
+
+            // Then I can search for that node with lucene query syntax
+            StatementResult result = session
+                    .run("CALL graphOfInterest([5,7], [], 2, 2) YIELD nodes, edges return nodes, edges");
+
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+            ArrayList<Long> trueNodeSet = new ArrayList<Long>();
+            trueNodeSet.add(new Long(3));
+            trueNodeSet.add(new Long(5));
+            trueNodeSet.add(new Long(6));
+            trueNodeSet.add(new Long(7));
+            trueNodeSet.add(new Long(9));
+
+            ArrayList<Long> trueEdgeSet = new ArrayList<Long>();
+            trueEdgeSet.add(new Long(3));
+            trueEdgeSet.add(new Long(4));
+            trueEdgeSet.add(new Long(6));
+            trueEdgeSet.add(new Long(7));
+            trueEdgeSet.add(new Long(8));
+            trueEdgeSet.add(new Long(10));
+
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
+        }
+    }
+
+    @Test
+    public void GoIForLength3() {
+
+        try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+                Session session = driver.session()) {
+            // And given I have a node in the database
+            session.run(AdvancedQueryTest.paperFig11Graph);
+
+            // Then I can search for that node with lucene query syntax
+            StatementResult result = session
+                    .run("CALL graphOfInterest([5,7], [], 3, 2) YIELD nodes, edges return nodes, edges");
+
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+            ArrayList<Long> trueNodeSet = new ArrayList<Long>();
+            trueNodeSet.add(new Long(3));
+            trueNodeSet.add(new Long(5));
+            trueNodeSet.add(new Long(6));
+            trueNodeSet.add(new Long(7));
+            trueNodeSet.add(new Long(8));
+            trueNodeSet.add(new Long(9));
+            trueNodeSet.add(new Long(10));
+            trueNodeSet.add(new Long(11));
+            trueNodeSet.add(new Long(12));
+            trueNodeSet.add(new Long(16));
+            trueNodeSet.add(new Long(17));
+
+            ArrayList<Long> trueEdgeSet = new ArrayList<Long>();
+            trueEdgeSet.add(new Long(3));
+            trueEdgeSet.add(new Long(4));
+            trueEdgeSet.add(new Long(6));
+            trueEdgeSet.add(new Long(7));
+            trueEdgeSet.add(new Long(8));
+            trueEdgeSet.add(new Long(9));
+            trueEdgeSet.add(new Long(10));
+            trueEdgeSet.add(new Long(11));
+            trueEdgeSet.add(new Long(12));
+            trueEdgeSet.add(new Long(13));
+            trueEdgeSet.add(new Long(14));
+            trueEdgeSet.add(new Long(15));
+            trueEdgeSet.add(new Long(16));
+            trueEdgeSet.add(new Long(17));
+            trueEdgeSet.add(new Long(18));
+            trueEdgeSet.add(new Long(20));
+            trueEdgeSet.add(new Long(21));
+            trueEdgeSet.add(new Long(22));
+            trueEdgeSet.add(new Long(23));
+
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
+        }
+    }
+
+    @Test
+    public void GoIOnImdb() {
+        // This is in a try-block, to make sure we close the driver after the test
+        try (Driver drv = GraphDatabase.driver("bolt://localhost:7687", AuthTokens.basic("neo4j", "123"));
+                Session session = drv.session()) {
+
+            // find 1 common downstream of 3 nodes
+            StatementResult result = session
+                    .run("CALL graphOfInterest([5,7], [], 3, 2) YIELD nodes, edges return nodes, edges");
+
+            InternalNode n = (InternalNode) result.single().get("nodes").asList().get(0);
+            assertThat(n.id()).isEqualTo(5);
         }
     }
 
@@ -101,7 +218,6 @@ public class AdvancedQueryTest {
             InternalNode n = (InternalNode) result.single().get("nodes").asList().get(0);
             assertThat(n.id()).isEqualTo(5);
         }
-
     }
 
     @Test
