@@ -21,6 +21,18 @@ import java.util.ArrayList;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.stream.Stream;
+
+// below cypher script is used to export graph as cypher script
+// CALL apoc.export.cypher.query("match (n)-[r]->(n2) return * limit 100", "subset.cypher", 
+// {format:'plain',separateFiles:false, cypherFormat: 'create', useOptimizations:{type: "NONE", unwindBatchSize: 20}})
+// YIELD file, batches, source, format, nodes, relationships, time, rows, batchSize
+// RETURN file, batches, source, format, nodes, relationships, time, rows, batchSize;
+
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class AdvancedQueryTest {
     private static final Config driverConfig = Config.build().withoutEncryption().toConfig();
@@ -178,6 +190,35 @@ public class AdvancedQueryTest {
 
             InternalNode n = (InternalNode) result.single().get("nodes").asList().get(0);
             assertThat(n.id()).isEqualTo(5);
+        }
+    }
+
+    @Test
+    public void GoIOnImdb100() {
+        try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+                Session session = driver.session()) {
+            // And given I have a node in the database
+            
+            String s = this.readFile("C:\\dev\\visuall-advanced-query\\src\\test\\java\\org\\ivis\\visuall\\imdb100.cypher").replaceAll("\n", "");
+            String[] arr = s.split(";");
+            for (String cql : arr) {
+                session.run(cql);
+            }
+
+            StatementResult result = session
+                    .run("CALL graphOfInterest([5,7], [], 3, 2) YIELD nodes, edges return nodes, edges");
+
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+            ArrayList<Long> trueNodeSet = new ArrayList<Long>();
+            
+            ArrayList<Long> trueEdgeSet = new ArrayList<Long>();
+            
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
         }
     }
 
@@ -368,5 +409,17 @@ public class AdvancedQueryTest {
 
             assertThat(result.single().get("nodes").asList().size()).isEqualTo(0);
         }
+    }
+
+    private String readFile(String filePath) {
+        StringBuilder contentBuilder = new StringBuilder();
+
+        try (Stream<String> stream = Files.lines(Paths.get(filePath), StandardCharsets.UTF_8)) {
+            stream.forEach(s -> contentBuilder.append(s).append("\n"));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return contentBuilder.toString();
     }
 }
