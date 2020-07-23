@@ -62,7 +62,7 @@ public class AdvancedQueryTest {
     public void GoIGiveEmpty4Length1() {
 
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
-                Session session = driver.session()) {
+             Session session = driver.session()) {
             // And given I have a node in the database
             session.run(AdvancedQueryTest.paperFig11Graph);
 
@@ -89,7 +89,7 @@ public class AdvancedQueryTest {
     public void GoIForLength2() {
 
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
-                Session session = driver.session()) {
+             Session session = driver.session()) {
             // And given I have a node in the database
             session.run(AdvancedQueryTest.paperFig11Graph);
 
@@ -126,7 +126,7 @@ public class AdvancedQueryTest {
     public void GoIForLength3() {
 
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
-                Session session = driver.session()) {
+             Session session = driver.session()) {
             // And given I have a node in the database
             session.run(AdvancedQueryTest.paperFig11Graph);
 
@@ -179,10 +179,10 @@ public class AdvancedQueryTest {
     }
 
     @Test
-    public void GoIOnImdb() {
+    public void GoIOnRunningInstance() {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver drv = GraphDatabase.driver("bolt://localhost:7687", AuthTokens.basic("neo4j", "123"));
-                Session session = drv.session()) {
+             Session session = drv.session()) {
 
             // find 1 common downstream of 3 nodes
             StatementResult result = session
@@ -193,20 +193,22 @@ public class AdvancedQueryTest {
         }
     }
 
+    // test subset of imdb "match (n)-[r]->(n2) return * limit 100"
     @Test
-    public void GoIOnImdb100() {
+    public void GoIOnImdb() {
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
-                Session session = driver.session()) {
+             Session session = driver.session()) {
             // And given I have a node in the database
-            
+
             String s = this.readFile("C:\\dev\\visuall-advanced-query\\src\\test\\java\\org\\ivis\\visuall\\imdb100.cypher").replaceAll("\n", "");
             String[] arr = s.split(";");
             for (String cql : arr) {
                 session.run(cql);
             }
 
-            StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 3, 2) YIELD nodes, edges return nodes, edges");
+            int id1 = session.run("match (n:Title) where n.primary_title = 'The Corbett-Fitzsimmons Fight' return ID(n)").single().get(0).asInt();
+            int id2 = session.run("match (n:Person) where n.primary_name = 'William K.L. Dickson' return ID(n)").single().get(0).asInt();
+            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, 2) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -214,9 +216,39 @@ public class AdvancedQueryTest {
             Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
                     .collect(Collectors.toSet());
             ArrayList<Long> trueNodeSet = new ArrayList<Long>();
-            
+
             ArrayList<Long> trueEdgeSet = new ArrayList<Long>();
-            
+
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
+        }
+    }
+
+    @Test
+    public void GoIOnImdb2() {
+        try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+             Session session = driver.session()) {
+            // And given I have a node in the database
+
+            String s = this.readFile("C:\\dev\\visuall-advanced-query\\src\\test\\java\\org\\ivis\\visuall\\imdb100.cypher").replaceAll("\n", "");
+            String[] arr = s.split(";");
+            for (String cql : arr) {
+                session.run(cql);
+            }
+
+            int id1 = session.run("match (n:Title) where n.primary_title = 'The Corbett-Fitzsimmons Fight' return ID(n)").single().get(0).asInt();
+            int id2 = session.run("match (n:Title) where n.primary_title = \"Rip's Toast\" return ID(n)").single().get(0).asInt();
+            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 4, 2) YIELD nodes, edges return nodes, edges");
+
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+            ArrayList<Long> trueNodeSet = new ArrayList<Long>();
+
+            ArrayList<Long> trueEdgeSet = new ArrayList<Long>();
+
             assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
             assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
         }
@@ -226,7 +258,7 @@ public class AdvancedQueryTest {
     public void commonTargetTest1() {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
-                Session session = driver.session()) {
+             Session session = driver.session()) {
             // And given I have a node in the database
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
@@ -247,10 +279,10 @@ public class AdvancedQueryTest {
     }
 
     @Test
-    public void commonTargetTestOnImdb() {
+    public void commonTargetTestOnRunningInstance() {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver drv = GraphDatabase.driver("bolt://localhost:7687", AuthTokens.basic("neo4j", "123"));
-                Session session = drv.session()) {
+             Session session = drv.session()) {
 
             // find 1 common downstream of 3 nodes
             StatementResult result = session.run(
@@ -265,7 +297,7 @@ public class AdvancedQueryTest {
     public void commonTargetTest2() {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
-                Session session = driver.session()) {
+             Session session = driver.session()) {
             // And given I have a node in the database
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
@@ -289,7 +321,7 @@ public class AdvancedQueryTest {
     public void commonTargetTest3() {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
-                Session session = driver.session()) {
+             Session session = driver.session()) {
             // And given I have a node in the database
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
@@ -317,7 +349,7 @@ public class AdvancedQueryTest {
     public void commonTargetUndirectedTest3() {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
-                Session session = driver.session()) {
+             Session session = driver.session()) {
             // And given I have a node in the database
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
@@ -345,7 +377,7 @@ public class AdvancedQueryTest {
     public void commonRegulatorTest1() {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
-                Session session = driver.session()) {
+             Session session = driver.session()) {
             // And given I have a node in the database
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
@@ -369,7 +401,7 @@ public class AdvancedQueryTest {
     public void shouldCommonTargetFail2Reach() {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
-                Session session = driver.session()) {
+             Session session = driver.session()) {
             // And given I have a node in the database
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
@@ -392,7 +424,7 @@ public class AdvancedQueryTest {
     public void shouldRegulatorTargetFail2Reach() {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
-                Session session = driver.session()) {
+             Session session = driver.session()) {
             // And given I have a node in the database
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
