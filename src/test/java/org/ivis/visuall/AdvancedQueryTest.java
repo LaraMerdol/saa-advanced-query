@@ -28,7 +28,7 @@ import java.nio.file.Paths;
 import java.util.stream.Stream;
 
 // below cypher script is used to export graph as cypher script
-// CALL apoc.export.cypher.query("match (n)-[r]->(n2) return * limit 100", "subset.cypher", 
+// CALL apoc.export.cypher.query("match (n)-[r]->(n2) return * limit 100", "subset.cypher",
 // {format:'plain',separateFiles:false, cypherFormat: 'create', useOptimizations:{type: "NONE", unwindBatchSize: 20}})
 // YIELD file, batches, source, format, nodes, relationships, time, rows, batchSize
 // RETURN file, batches, source, format, nodes, relationships, time, rows, batchSize;
@@ -37,7 +37,7 @@ import java.util.stream.Stream;
 public class AdvancedQueryTest {
     private static final Config driverConfig = Config.build().withoutEncryption().toConfig();
     private ServerControls embeddedDatabaseServer;
-    private static String paperFig11Graph = "CREATE (EPHA3:P{n:'EPHA3'}) CREATE (EPS15:P{n:'EPS15'}) CREATE (P140:P{n:'P140'})"
+    private static final String paperFig11Graph = "CREATE (EPHA3:P{n:'EPHA3'}) CREATE (EPS15:P{n:'EPS15'}) CREATE (P140:P{n:'P140'})"
             + "CREATE (MAP4K1:P{n:'MAP4K1'}) CREATE (EPHB3:P{n:'EPHB3'})"
             + "CREATE (CRKL:P{n:'CRKL'}) CREATE (MAP4K5:P{n:'MAP4K5'}) CREATE (CRK:P{n:'CRK'}) CREATE (PDGFRB:P{n:'PDGFRB'})"
             + "CREATE (PDGFRA:P{n:'PDGFRA'}) CREATE (SOS1:P{n:'SOS1'}) CREATE (GRB2:P{n:'GRB2'}) CREATE (CBLC:P{n:'CBLC'})"
@@ -239,6 +239,36 @@ public class AdvancedQueryTest {
             int id1 = session.run("match (n:Title) where n.primary_title = 'The Corbett-Fitzsimmons Fight' return ID(n)").single().get(0).asInt();
             int id2 = session.run("match (n:Title) where n.primary_title = \"Rip's Toast\" return ID(n)").single().get(0).asInt();
             StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 4, 2) YIELD nodes, edges return nodes, edges");
+
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+            ArrayList<Long> trueNodeSet = new ArrayList<Long>();
+
+            ArrayList<Long> trueEdgeSet = new ArrayList<Long>();
+
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
+        }
+    }
+
+    @Test
+    public void GoIOnSOF() {
+        try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+             Session session = driver.session()) {
+            // And given I have a node in the database
+
+            String s = this.readFile("C:\\dev\\visuall-advanced-query\\src\\test\\java\\org\\ivis\\visuall\\sofDB.cypher").replaceAll("\n", "");
+            String[] arr = s.split(";");
+            for (String cql : arr) {
+                session.run(cql);
+            }
+
+            int id1 = session.run("match (n:Post) where n.title = 'Percentage width child element in absolutely positioned parent on Internet Explorer 7' return ID(n)").single().get(0).asInt();
+            int id2 = session.run("match (n:Post) where n.title = 'Convert Decimal to Double?' return ID(n)").single().get(0).asInt();
+            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, 1) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())

@@ -1,11 +1,7 @@
 package org.ivis.visuall;
 
-import java.util.ArrayList;
-import java.util.Queue;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.neo4j.procedure.Context;
@@ -34,9 +30,9 @@ public class AdvancedQuery {
     @Context
     public Log log;
 
-    /**
-     * @param ids
-     * @param @Name("ignoredTypes"
+    /** finds the minimal sub-graph from given nodes
+     * @param ids database ids of nodes
+     * @param ignoredTypes list of strings which are ignored types
      * @return Stream<Output>
      */
     @Procedure(value = "graphOfInterest", mode = Mode.WRITE)
@@ -60,7 +56,7 @@ public class AdvancedQuery {
             o1.edges.addAll(o2.edges);
             o1.nodes.addAll(o2.nodes);
 
-            BFSOutput r = new BFSOutput(new HashSet<Long>(), new HashSet<Long>());
+            BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
             for (long edgeId : o1.edges) {
                 if (edgeLabels.get(edgeId).fwd + edgeLabels.get(edgeId).rev <= lengthLimit) {
                     r.edges.add(edgeId);
@@ -73,7 +69,7 @@ public class AdvancedQuery {
             }
             r.nodes.addAll(ids);
             r = this.removeOrphanEdges(r);
-            r = this.purify(idSet, r);
+            this.purify(idSet, r);
             r = this.removeOrphanEdges(r);
             Output o = new Output(new ArrayList<Node>(), new ArrayList<Relationship>());
             for (Long nodeId : r.nodes) {
@@ -84,16 +80,19 @@ public class AdvancedQuery {
             }
             return Stream.of(o);
         } catch (Exception e) {
-            System.out.println("exception " + e);
-            e.printStackTrace();
+            this.log.error("exception in graphofInterest" + e);
+            String s2 = Arrays.stream(e.getStackTrace())
+                    .map(StackTraceElement::toString)
+                    .collect(Collectors.joining("\n"));
+            this.log.error(s2);
             return Stream.of(new Output(new ArrayList<Node>(), new ArrayList<Relationship>()));
         }
 
     }
 
-    /**
-     * @param ids
-     * @param @Name("ignoredTypes"
+    /** finds the common up/down/undirected target/regulator
+     * @param ids database ids of nodes
+     * @param ignoredTypes list of strings which are ignored types
      * @return Stream<Output>
      */
     @Procedure(value = "commonStream", mode = Mode.WRITE)
@@ -121,11 +120,11 @@ public class AdvancedQuery {
     }
 
     /**
-     * @param node2Reached
-     * @param nodeId
-     * @param ignoredTypes
-     * @param depthLimit
-     * @param dir
+     * @param node2Reached keeps reached data for each node
+     * @param nodeId id of node to make BFS
+     * @param ignoredTypes list of strings which are ignored types
+     * @param depthLimit deepness of BFS
+     * @param dir direction of BFS
      * @return HashSet<Long>
      */
     private HashSet<Long> BFS(HashMap<Long, Integer> node2Reached, long nodeId, List<String> ignoredTypes,
@@ -181,7 +180,7 @@ public class AdvancedQuery {
      * map number to direction, 0: OUTGOING (downstream), 1: INCOMING (upstream), 2:
      * BOTH
      *
-     * @param n
+     * @param n number for enum
      * @return Direction
      */
     private Direction num2Dir(long n) {
@@ -196,7 +195,7 @@ public class AdvancedQuery {
     }
 
     /**
-     * @param ignoredTypes
+     * @param ignoredTypes list of strings which are ignored types
      * @return RelationshipType[]
      */
     private RelationshipType[] getValidRelationshipTypes(List<String> ignoredTypes) {
@@ -216,8 +215,8 @@ public class AdvancedQuery {
 
     /**
      * @param ids          a list of node ids
-     * @param ignoredTypes
-     * @param lengthLimit
+     * @param ignoredTypes list of strings which are ignored types
+     * @param lengthLimit maximum length of a path between ids in sub graph
      * @param dir          should be INCOMING or OUTGOING
      * @return Output
      */
@@ -228,10 +227,7 @@ public class AdvancedQuery {
         HashSet<Long> visitedNodes = new HashSet<Long>();
 
         // prepare queue
-        Queue<Long> queue = new LinkedList<>();
-        for (Long id : ids) {
-            queue.add(id);
-        }
+        Queue<Long> queue = new LinkedList<>(ids);
 
         RelationshipType[] allowedEdgeTypesArr = getValidRelationshipTypes(ignoredTypes);
 
@@ -252,11 +248,11 @@ public class AdvancedQuery {
                 }
                 LabelData labelE = edgeLabels.get(edgeId);
                 if (labelE == null) {
-                    labelE = new LabelData();
+                    labelE = new LabelData(lengthLimit + 1);
                 }
                 LabelData labelN1 = nodeLabels.get(n1);
                 if (labelN1 == null) {
-                    labelN1 = new LabelData();
+                    labelN1 = new LabelData(lengthLimit + 1);
                 }
                 if (dir == Direction.OUTGOING) {
                     labelE.fwd = labelN1.fwd + 1;
@@ -270,7 +266,7 @@ public class AdvancedQuery {
                 edgeSet.add(edgeId);
                 LabelData labelN2 = nodeLabels.get(n2Id);
                 if (labelN2 == null) {
-                    labelN2 = new LabelData();
+                    labelN2 = new LabelData(lengthLimit + 1);
                 }
                 nodeLabels.put(n2Id, labelN2);
                 if (labelN2.getLabel(dir) > labelN1.getLabel(dir) + 1) {
@@ -286,8 +282,8 @@ public class AdvancedQuery {
     }
 
     /**
-     * @param n
-     * @param ignoredTypes
+     * @param n node
+     * @param ignoredTypes list of strings which are ignored types
      * @return boolean
      */
     private boolean isNodeIgnored(Node n, List<String> ignoredTypes) {
@@ -304,11 +300,10 @@ public class AdvancedQuery {
      * chops all the nodes that are connected to only 1 node iteratively, returns a graph where each node is
      * at least degree-2 or inside the list of srcIds
      *
-     * @param srcIds
-     * @param subGraph
-     * @return BFSOutput
+     * @param srcIds ids of nodes which are sources
+     * @param subGraph current sub-graph which will be modified
      */
-    private BFSOutput purify(HashSet<Long> srcIds, BFSOutput subGraph) {
+    private void purify(HashSet<Long> srcIds, BFSOutput subGraph) {
         HashMap<Long, HashSet<Long>> node2edge = new HashMap<>();
         HashMap<Long, HashSet<Long>> node2node = new HashMap<>();
         subGraph.nodes.addAll(srcIds);
@@ -343,8 +338,6 @@ public class AdvancedQuery {
 
             degree1Nodes = this.getOrphanNodes(node2node, srcIds);
         }
-
-        return subGraph;
     }
 
     private void insert2AdjList(HashMap<Long, HashSet<Long>> map, long key, long val) {
@@ -390,16 +383,6 @@ public class AdvancedQuery {
         }
     }
 
-    public class BFSData {
-        public HashMap<Long, Integer> node2Reached;
-        public HashSet<Long> visitedNodes;
-
-        BFSData(HashMap<Long, Integer> node2Reached, HashSet<Long> visitedNodes) {
-            this.node2Reached = node2Reached;
-            this.visitedNodes = visitedNodes;
-        }
-    }
-
     public class BFSOutput {
         public HashSet<Long> nodes;
         public HashSet<Long> edges;
@@ -411,20 +394,20 @@ public class AdvancedQuery {
     }
 
     public class LabelData {
-        public int fwd;
-        public int rev;
+        public long fwd;
+        public long rev;
 
-        LabelData(int fwd, int rev) {
+        LabelData(long fwd, long rev) {
             this.fwd = fwd;
             this.rev = rev;
         }
 
-        LabelData() {
-            this.fwd = Integer.MAX_VALUE;
-            this.rev = Integer.MAX_VALUE;
+        LabelData(long n) {
+            this.fwd = n;
+            this.rev = n;
         }
 
-        public void setLabel(int val, Direction dir) {
+        public void setLabel(long val, Direction dir) {
             if (dir == Direction.INCOMING) {
                 this.rev = val;
             } else if (dir == Direction.OUTGOING) {
@@ -432,7 +415,7 @@ public class AdvancedQuery {
             }
         }
 
-        public int getLabel(Direction dir) {
+        public long getLabel(Direction dir) {
             if (dir == Direction.INCOMING) {
                 return this.rev;
             }

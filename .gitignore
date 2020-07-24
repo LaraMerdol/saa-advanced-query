@@ -20,9 +20,5 @@ out
 .shell_history
 .mailmap
 .java-version
-.cache-main
-.cache-tests
 Thumbs.db
-.cache-main
-.cache-tests
 logs
