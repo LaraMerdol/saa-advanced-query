@@ -30,68 +30,58 @@ public class AdvancedQuery {
     @Context
     public Log log;
 
-    /** finds the minimal sub-graph from given nodes
-     * @param ids database ids of nodes
+    /**
+     * finds the minimal sub-graph from given nodes
+     *
+     * @param ids          database ids of nodes
      * @param ignoredTypes list of strings which are ignored types
      * @return Stream<Output>
      */
     @Procedure(value = "graphOfInterest", mode = Mode.WRITE)
     @Description("From specified nodes forms a minimal graph of interest")
     public Stream<Output> graphOfInterest(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                          @Name("lengthLimit") long lengthLimit, @Name("direction") long direction) {
-        try {
-            Direction d = this.num2Dir(direction);
-
-            HashSet<Long> idSet = new HashSet<>(ids);
-            HashMap<Long, LabelData> edgeLabels = new HashMap<>();
-            HashMap<Long, LabelData> nodeLabels = new HashMap<>();
-            for (Long id : ids) {
-                nodeLabels.put(id, new LabelData(0, 0));
-            }
-
-            BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.OUTGOING,
-                    d != Direction.BOTH);
-            BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.INCOMING,
-                    d != Direction.BOTH);
-            o1.edges.addAll(o2.edges);
-            o1.nodes.addAll(o2.nodes);
-
-            BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
-            for (long edgeId : o1.edges) {
-                if (edgeLabels.get(edgeId).fwd + edgeLabels.get(edgeId).rev <= lengthLimit) {
-                    r.edges.add(edgeId);
-                }
-            }
-            for (long nodeId : o1.nodes) {
-                if (nodeLabels.get(nodeId).fwd + nodeLabels.get(nodeId).rev <= lengthLimit) {
-                    r.nodes.add(nodeId);
-                }
-            }
-            r.nodes.addAll(ids);
-            r = this.removeOrphanEdges(r);
-            this.purify(idSet, r);
-            r = this.removeOrphanEdges(r);
-            Output o = new Output(new ArrayList<Node>(), new ArrayList<Relationship>());
-            for (Long nodeId : r.nodes) {
-                o.nodes.add(this.db.getNodeById(nodeId));
-            }
-            for (Long edgeId : r.edges) {
-                o.edges.add(this.db.getRelationshipById(edgeId));
-            }
-            return Stream.of(o);
-        } catch (Exception e) {
-            this.log.error("exception in graphofInterest" + e);
-            String s2 = Arrays.stream(e.getStackTrace())
-                    .map(StackTraceElement::toString)
-                    .collect(Collectors.joining("\n"));
-            this.log.error(s2);
-            return Stream.of(new Output(new ArrayList<Node>(), new ArrayList<Relationship>()));
+                                          @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected) {
+        HashSet<Long> idSet = new HashSet<>(ids);
+        HashMap<Long, LabelData> edgeLabels = new HashMap<>();
+        HashMap<Long, LabelData> nodeLabels = new HashMap<>();
+        for (Long id : ids) {
+            nodeLabels.put(id, new LabelData(0, 0));
         }
 
+        BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.OUTGOING, isDirected);
+        BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.INCOMING, isDirected);
+        o1.edges.addAll(o2.edges);
+        o1.nodes.addAll(o2.nodes);
+
+        BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
+        for (long edgeId : o1.edges) {
+            if (edgeLabels.get(edgeId).fwd + edgeLabels.get(edgeId).rev <= lengthLimit) {
+                r.edges.add(edgeId);
+            }
+        }
+        for (long nodeId : o1.nodes) {
+            if (nodeLabels.get(nodeId).fwd + nodeLabels.get(nodeId).rev <= lengthLimit) {
+                r.nodes.add(nodeId);
+            }
+        }
+        r.nodes.addAll(ids);
+        r = this.removeOrphanEdges(r);
+        this.purify(idSet, r);
+        r = this.removeOrphanEdges(r);
+        Output o = new Output(new ArrayList<>(), new ArrayList<>());
+        for (Long nodeId : r.nodes) {
+            o.nodes.add(this.db.getNodeById(nodeId));
+        }
+        for (Long edgeId : r.edges) {
+            o.edges.add(this.db.getRelationshipById(edgeId));
+        }
+        return Stream.of(o);
     }
 
-    /** finds the common up/down/undirected target/regulator
-     * @param ids database ids of nodes
+    /**
+     * finds the common up/down/undirected target/regulator
+     *
+     * @param ids          database ids of nodes
      * @param ignoredTypes list of strings which are ignored types
      * @return Stream<Output>
      */
@@ -100,7 +90,7 @@ public class AdvancedQuery {
     public Stream<Output> commonStream(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                        @Name("lengthLimit") Long lengthLimit, @Name("direction") long direction) {
 
-        Output oup = new Output(new ArrayList<Node>(), new ArrayList<Relationship>());
+        Output oup = new Output(new ArrayList<>(), new ArrayList<>());
 
         HashSet<Long> candidates = new HashSet<>();
         HashMap<Long, Integer> node2Reached = new HashMap<>();
@@ -121,10 +111,10 @@ public class AdvancedQuery {
 
     /**
      * @param node2Reached keeps reached data for each node
-     * @param nodeId id of node to make BFS
+     * @param nodeId       id of node to make BFS
      * @param ignoredTypes list of strings which are ignored types
-     * @param depthLimit deepness of BFS
-     * @param dir direction of BFS
+     * @param depthLimit   deepness of BFS
+     * @param dir          direction of BFS
      * @return HashSet<Long>
      */
     private HashSet<Long> BFS(HashMap<Long, Integer> node2Reached, long nodeId, List<String> ignoredTypes,
@@ -209,22 +199,22 @@ public class AdvancedQuery {
                 allowedEdgeTypes.add(r);
             }
         }
-        return allowedEdgeTypes.toArray(new RelationshipType[allowedEdgeTypes.size()]);
+        return allowedEdgeTypes.toArray(new RelationshipType[0]);
 
     }
 
     /**
      * @param ids          a list of node ids
      * @param ignoredTypes list of strings which are ignored types
-     * @param lengthLimit maximum length of a path between ids in sub graph
+     * @param lengthLimit  maximum length of a path between ids in sub graph
      * @param dir          should be INCOMING or OUTGOING
      * @return Output
      */
     private BFSOutput GoI_BFS(HashMap<Long, LabelData> nodeLabels, HashMap<Long, LabelData> edgeLabels,
                               HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir, boolean isDirected) {
-        HashSet<Long> nodeSet = new HashSet<Long>();
-        HashSet<Long> edgeSet = new HashSet<Long>();
-        HashSet<Long> visitedNodes = new HashSet<Long>();
+        HashSet<Long> nodeSet = new HashSet<>();
+        HashSet<Long> edgeSet = new HashSet<>();
+        HashSet<Long> visitedNodes = new HashSet<>();
 
         // prepare queue
         Queue<Long> queue = new LinkedList<>(ids);
@@ -282,7 +272,7 @@ public class AdvancedQuery {
     }
 
     /**
-     * @param n node
+     * @param n            node
      * @param ignoredTypes list of strings which are ignored types
      * @return boolean
      */
@@ -300,7 +290,7 @@ public class AdvancedQuery {
      * chops all the nodes that are connected to only 1 node iteratively, returns a graph where each node is
      * at least degree-2 or inside the list of srcIds
      *
-     * @param srcIds ids of nodes which are sources
+     * @param srcIds   ids of nodes which are sources
      * @param subGraph current sub-graph which will be modified
      */
     private void purify(HashSet<Long> srcIds, BFSOutput subGraph) {
@@ -349,14 +339,14 @@ public class AdvancedQuery {
         map.put(key, set);
     }
 
-    private BFSOutput removeOrphanEdges(BFSOutput elems) {
-        BFSOutput result = new BFSOutput(elems.nodes, new HashSet<Long>());
+    private BFSOutput removeOrphanEdges(BFSOutput elms) {
+        BFSOutput result = new BFSOutput(elms.nodes, new HashSet<>());
 
-        for (long edgeId : elems.edges) {
+        for (long edgeId : elms.edges) {
             Relationship r = this.db.getRelationshipById(edgeId);
             long s = r.getStartNodeId();
             long e = r.getEndNodeId();
-            if (elems.nodes.contains(s) && elems.nodes.contains(e)) {
+            if (elms.nodes.contains(s) && elms.nodes.contains(e)) {
                 result.edges.add(edgeId);
             }
         }

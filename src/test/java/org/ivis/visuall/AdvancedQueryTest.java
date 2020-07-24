@@ -68,7 +68,7 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 1, 2) YIELD nodes, edges return nodes, edges");
+                    .run("CALL graphOfInterest([5,7], [], 1, false) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -76,9 +76,9 @@ public class AdvancedQueryTest {
             Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
                     .collect(Collectors.toSet());
 
-            ArrayList<Long> trueNodeSet = new ArrayList<Long>();
-            trueNodeSet.add(new Long(5));
-            trueNodeSet.add(new Long(7));
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
+            trueNodeSet.add(5L);
+            trueNodeSet.add(7L);
 
             assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
             assertThat(edgeSet.size()).isEqualTo(0);
@@ -95,27 +95,27 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 2, 2) YIELD nodes, edges return nodes, edges");
+                    .run("CALL graphOfInterest([5,7], [], 2, false) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
             Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
                     .collect(Collectors.toSet());
-            ArrayList<Long> trueNodeSet = new ArrayList<Long>();
-            trueNodeSet.add(new Long(3));
-            trueNodeSet.add(new Long(5));
-            trueNodeSet.add(new Long(6));
-            trueNodeSet.add(new Long(7));
-            trueNodeSet.add(new Long(9));
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
+            trueNodeSet.add(3L);
+            trueNodeSet.add(5L);
+            trueNodeSet.add(6L);
+            trueNodeSet.add(7L);
+            trueNodeSet.add(9L);
 
-            ArrayList<Long> trueEdgeSet = new ArrayList<Long>();
-            trueEdgeSet.add(new Long(3));
-            trueEdgeSet.add(new Long(4));
-            trueEdgeSet.add(new Long(6));
-            trueEdgeSet.add(new Long(7));
-            trueEdgeSet.add(new Long(8));
-            trueEdgeSet.add(new Long(10));
+            ArrayList<Long> trueEdgeSet = new ArrayList<>();
+            trueEdgeSet.add(3L);
+            trueEdgeSet.add(4L);
+            trueEdgeSet.add(6L);
+            trueEdgeSet.add(7L);
+            trueEdgeSet.add(8L);
+            trueEdgeSet.add(10L);
 
             assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
             assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
@@ -132,46 +132,46 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 3, 2) YIELD nodes, edges return nodes, edges");
+                    .run("CALL graphOfInterest([5,7], [], 3, false) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
             Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
                     .collect(Collectors.toSet());
-            ArrayList<Long> trueNodeSet = new ArrayList<Long>();
-            trueNodeSet.add(new Long(3));
-            trueNodeSet.add(new Long(5));
-            trueNodeSet.add(new Long(6));
-            trueNodeSet.add(new Long(7));
-            trueNodeSet.add(new Long(8));
-            trueNodeSet.add(new Long(9));
-            trueNodeSet.add(new Long(10));
-            trueNodeSet.add(new Long(11));
-            trueNodeSet.add(new Long(12));
-            trueNodeSet.add(new Long(16));
-            trueNodeSet.add(new Long(17));
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
+            trueNodeSet.add(3L);
+            trueNodeSet.add(5L);
+            trueNodeSet.add(6L);
+            trueNodeSet.add(7L);
+            trueNodeSet.add(8L);
+            trueNodeSet.add(9L);
+            trueNodeSet.add(10L);
+            trueNodeSet.add(11L);
+            trueNodeSet.add(12L);
+            trueNodeSet.add(16L);
+            trueNodeSet.add(17L);
 
-            ArrayList<Long> trueEdgeSet = new ArrayList<Long>();
-            trueEdgeSet.add(new Long(3));
-            trueEdgeSet.add(new Long(4));
-            trueEdgeSet.add(new Long(6));
-            trueEdgeSet.add(new Long(7));
-            trueEdgeSet.add(new Long(8));
-            trueEdgeSet.add(new Long(9));
-            trueEdgeSet.add(new Long(10));
-            trueEdgeSet.add(new Long(11));
-            trueEdgeSet.add(new Long(12));
-            trueEdgeSet.add(new Long(13));
-            trueEdgeSet.add(new Long(14));
-            trueEdgeSet.add(new Long(15));
-            trueEdgeSet.add(new Long(16));
-            trueEdgeSet.add(new Long(17));
-            trueEdgeSet.add(new Long(18));
-            trueEdgeSet.add(new Long(20));
-            trueEdgeSet.add(new Long(21));
-            trueEdgeSet.add(new Long(22));
-            trueEdgeSet.add(new Long(23));
+            ArrayList<Long> trueEdgeSet = new ArrayList<>();
+            trueEdgeSet.add(3L);
+            trueEdgeSet.add(4L);
+            trueEdgeSet.add(6L);
+            trueEdgeSet.add(7L);
+            trueEdgeSet.add(8L);
+            trueEdgeSet.add(9L);
+            trueEdgeSet.add(10L);
+            trueEdgeSet.add(11L);
+            trueEdgeSet.add(12L);
+            trueEdgeSet.add(13L);
+            trueEdgeSet.add(14L);
+            trueEdgeSet.add(15L);
+            trueEdgeSet.add(16L);
+            trueEdgeSet.add(17L);
+            trueEdgeSet.add(18L);
+            trueEdgeSet.add(20L);
+            trueEdgeSet.add(21L);
+            trueEdgeSet.add(22L);
+            trueEdgeSet.add(23L);
 
             assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
             assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
@@ -186,7 +186,7 @@ public class AdvancedQueryTest {
 
             // find 1 common downstream of 3 nodes
             StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 3, 2) YIELD nodes, edges return nodes, edges");
+                    .run("CALL graphOfInterest([5,7], [], 3, false) YIELD nodes, edges return nodes, edges");
 
             InternalNode n = (InternalNode) result.single().get("nodes").asList().get(0);
             assertThat(n.id()).isEqualTo(5);
@@ -208,16 +208,16 @@ public class AdvancedQueryTest {
 
             int id1 = session.run("match (n:Title) where n.primary_title = 'The Corbett-Fitzsimmons Fight' return ID(n)").single().get(0).asInt();
             int id2 = session.run("match (n:Person) where n.primary_name = 'William K.L. Dickson' return ID(n)").single().get(0).asInt();
-            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, 2) YIELD nodes, edges return nodes, edges");
+            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, false) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
             Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
                     .collect(Collectors.toSet());
-            ArrayList<Long> trueNodeSet = new ArrayList<Long>();
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
 
-            ArrayList<Long> trueEdgeSet = new ArrayList<Long>();
+            ArrayList<Long> trueEdgeSet = new ArrayList<>();
 
             assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
             assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
@@ -238,16 +238,16 @@ public class AdvancedQueryTest {
 
             int id1 = session.run("match (n:Title) where n.primary_title = 'The Corbett-Fitzsimmons Fight' return ID(n)").single().get(0).asInt();
             int id2 = session.run("match (n:Title) where n.primary_title = \"Rip's Toast\" return ID(n)").single().get(0).asInt();
-            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 4, 2) YIELD nodes, edges return nodes, edges");
+            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 4, false) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
             Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
                     .collect(Collectors.toSet());
-            ArrayList<Long> trueNodeSet = new ArrayList<Long>();
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
 
-            ArrayList<Long> trueEdgeSet = new ArrayList<Long>();
+            ArrayList<Long> trueEdgeSet = new ArrayList<>();
 
             assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
             assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
@@ -268,16 +268,16 @@ public class AdvancedQueryTest {
 
             int id1 = session.run("match (n:Post) where n.title = 'Percentage width child element in absolutely positioned parent on Internet Explorer 7' return ID(n)").single().get(0).asInt();
             int id2 = session.run("match (n:Post) where n.title = 'Convert Decimal to Double?' return ID(n)").single().get(0).asInt();
-            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, 1) YIELD nodes, edges return nodes, edges");
+            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, true) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
             Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
                     .collect(Collectors.toSet());
-            ArrayList<Long> trueNodeSet = new ArrayList<Long>();
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
 
-            ArrayList<Long> trueEdgeSet = new ArrayList<Long>();
+            ArrayList<Long> trueEdgeSet = new ArrayList<>();
 
             assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
             assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
@@ -370,8 +370,8 @@ public class AdvancedQueryTest {
             Set<Long> s = result.single().get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
 
-            assertThat(s.contains(new Long(13))).isEqualTo(true);
-            assertThat(s.contains(new Long(14))).isEqualTo(true);
+            assertThat(s.contains(13L)).isEqualTo(true);
+            assertThat(s.contains(14L)).isEqualTo(true);
         }
     }
 
@@ -398,8 +398,8 @@ public class AdvancedQueryTest {
             Set<Long> s = result.single().get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
 
-            assertThat(s.contains(new Long(13))).isEqualTo(true);
-            assertThat(s.contains(new Long(14))).isEqualTo(true);
+            assertThat(s.contains(13L)).isEqualTo(true);
+            assertThat(s.contains(14L)).isEqualTo(true);
         }
     }
 
