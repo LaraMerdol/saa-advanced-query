@@ -303,8 +303,35 @@ public class AdvancedQueryTest {
             StatementResult result = session
                     .run("CALL commonStream([1,2,3], [], 3, 0) YIELD nodes, edges return nodes, edges");
 
-            InternalNode n = (InternalNode) result.single().get("nodes").asList().get(0);
-            assertThat(n.id()).isEqualTo(13);
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
+            trueNodeSet.add(1L);
+            trueNodeSet.add(2L);
+            trueNodeSet.add(3L);
+            trueNodeSet.add(6L);
+            trueNodeSet.add(7L);
+            trueNodeSet.add(8L);
+            trueNodeSet.add(10L);
+            trueNodeSet.add(11L);
+            trueNodeSet.add(12L);
+            trueNodeSet.add(13L);
+            ArrayList<Long> trueEdgeSet = new ArrayList<>();
+            trueEdgeSet.add(1L);
+            trueEdgeSet.add(2L);
+            trueEdgeSet.add(3L);
+            trueEdgeSet.add(5L);
+            trueEdgeSet.add(6L);
+            trueEdgeSet.add(7L);
+            trueEdgeSet.add(8L);
+            trueEdgeSet.add(9L);
+            trueEdgeSet.add(10L);
+
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
         }
     }
 
@@ -342,11 +369,33 @@ public class AdvancedQueryTest {
             StatementResult result = session
                     .run("CALL commonStream([1,3], [], 3, 0) YIELD nodes, edges return nodes, edges");
 
-            InternalNode n = (InternalNode) result.single().get("nodes").asList().get(0);
-            assertThat(n.id()).isEqualTo(13);
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
+            trueNodeSet.add(1L);
+            trueNodeSet.add(3L);
+            trueNodeSet.add(6L);
+            trueNodeSet.add(8L);
+            trueNodeSet.add(10L);
+            trueNodeSet.add(12L);
+            trueNodeSet.add(13L);
+            ArrayList<Long> trueEdgeSet = new ArrayList<>();
+            trueEdgeSet.add(1L);
+            trueEdgeSet.add(3L);
+            trueEdgeSet.add(5L);
+            trueEdgeSet.add(7L);
+            trueEdgeSet.add(8L);
+            trueEdgeSet.add(10L);
+
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
         }
     }
 
+    // contains 2 target nodes
     @Test
     public void commonTargetTest3() {
         // This is in a try-block, to make sure we close the driver after the test
@@ -395,11 +444,35 @@ public class AdvancedQueryTest {
             StatementResult result = session
                     .run("CALL commonStream([1,2,3], [], 3, 2) YIELD nodes, edges return nodes, edges");
 
-            Set<Long> s = result.single().get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
+            trueNodeSet.add(1L);
+            trueNodeSet.add(2L);
+            trueNodeSet.add(3L);
+            trueNodeSet.add(6L);
+            trueNodeSet.add(7L);
+            trueNodeSet.add(8L);
+            trueNodeSet.add(10L);
+            trueNodeSet.add(11L);
+            trueNodeSet.add(12L);
+            trueNodeSet.add(13L);
+            ArrayList<Long> trueEdgeSet = new ArrayList<>();
+            trueEdgeSet.add(1L);
+            trueEdgeSet.add(2L);
+            trueEdgeSet.add(3L);
+            trueEdgeSet.add(5L);
+            trueEdgeSet.add(6L);
+            trueEdgeSet.add(7L);
+            trueEdgeSet.add(8L);
+            trueEdgeSet.add(9L);
+            trueEdgeSet.add(10L);
 
-            assertThat(s.contains(13L)).isEqualTo(true);
-            assertThat(s.contains(14L)).isEqualTo(true);
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
         }
     }
 
@@ -422,8 +495,35 @@ public class AdvancedQueryTest {
             StatementResult result = session
                     .run("CALL commonStream([1,2,3], [], 3, 1) YIELD nodes, edges return nodes, edges");
 
-            InternalNode n = (InternalNode) result.single().get("nodes").asList().get(0);
-            assertThat(n.id()).isEqualTo(13);
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
+            trueNodeSet.add(1L);
+            trueNodeSet.add(2L);
+            trueNodeSet.add(3L);
+            trueNodeSet.add(6L);
+            trueNodeSet.add(7L);
+            trueNodeSet.add(8L);
+            trueNodeSet.add(10L);
+            trueNodeSet.add(11L);
+            trueNodeSet.add(12L);
+            trueNodeSet.add(13L);
+            ArrayList<Long> trueEdgeSet = new ArrayList<>();
+            trueEdgeSet.add(1L);
+            trueEdgeSet.add(2L);
+            trueEdgeSet.add(3L);
+            trueEdgeSet.add(5L);
+            trueEdgeSet.add(6L);
+            trueEdgeSet.add(7L);
+            trueEdgeSet.add(8L);
+            trueEdgeSet.add(9L);
+            trueEdgeSet.add(10L);
+
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
         }
     }
 

@@ -4,20 +4,14 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.neo4j.graphdb.*;
 import org.neo4j.procedure.Context;
 import org.neo4j.procedure.Procedure;
 import org.neo4j.procedure.Description;
 import org.neo4j.procedure.Mode;
 import org.neo4j.procedure.Name;
 
-import org.neo4j.graphdb.GraphDatabaseService;
-import org.neo4j.graphdb.Label;
-import org.neo4j.graphdb.Node;
-import org.neo4j.graphdb.Relationship;
-import org.neo4j.graphdb.RelationshipType;
-import org.neo4j.graphdb.ResourceIterable;
 import org.neo4j.logging.Log;
-import org.neo4j.graphdb.Direction;
 
 public class AdvancedQuery {
     // This field declares that we need a GraphDatabaseService
@@ -38,9 +32,85 @@ public class AdvancedQuery {
      * @return Stream<Output>
      */
     @Procedure(value = "graphOfInterest", mode = Mode.WRITE)
-    @Description("From specified nodes forms a minimal graph of interest")
+    @Description("finds the minimal sub-graph from given nodes")
     public Stream<Output> graphOfInterest(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                           @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected) {
+        return Stream.of(GoI(ids, ignoredTypes, lengthLimit, isDirected, false));
+    }
+
+    /**
+     * returns only the nodes of the minimal sub-graph
+     *
+     * @param ids          database ids of nodes
+     * @param ignoredTypes list of strings which are ignored types
+     * @return Stream<Output>
+     */
+    @Procedure(value = "graphOfInterest4Table", mode = Mode.WRITE)
+    @Description("returns only the nodes of the minimal sub-graph")
+    public Stream<Output> graphOfInterest4Table(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
+                                                @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected) {
+        return Stream.of(GoI(ids, ignoredTypes, lengthLimit, isDirected, true));
+    }
+
+    /**
+     * returns only the count of nodes of the minimal sub-graph
+     *
+     * @param ids          database ids of nodes
+     * @param ignoredTypes list of strings which are ignored types
+     * @return Stream<Output>
+     */
+    @Procedure(value = "graphOfInterestCount", mode = Mode.WRITE)
+    @Description("returns only the count of nodes of the minimal sub-graph")
+    public Stream<LongOup> graphOfInterestCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
+                                                @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected) {
+        long n = GoI(ids, ignoredTypes, lengthLimit, isDirected, true).nodes.size();
+        return Stream.of(new LongOup(n));
+    }
+
+    /**
+     * finds the common up/down/undirected target/regulator
+     *
+     * @param ids          database ids of nodes
+     * @param ignoredTypes list of strings which are ignored types
+     * @return Stream<Output>
+     */
+    @Procedure(value = "commonStream", mode = Mode.WRITE)
+    @Description("From specified nodes forms founds common upstream/downstream (target/regulator)")
+    public Stream<Output> commonStream(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
+                                       @Name("lengthLimit") long lengthLimit, @Name("direction") long direction) {
+        return Stream.of(this.CS(ids, ignoredTypes, lengthLimit, direction, false));
+    }
+
+    /**
+     * finds only the nodes of the common up/down/undirected target/regulator
+     *
+     * @param ids          database ids of nodes
+     * @param ignoredTypes list of strings which are ignored types
+     * @return Stream<Output>
+     */
+    @Procedure(value = "commonStream4Table", mode = Mode.WRITE)
+    @Description("finds only the nodes of the common up/down/undirected target/regulator")
+    public Stream<LongOup> commonStream4Table(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
+                                             @Name("lengthLimit") long lengthLimit, @Name("direction") long direction) {
+        long n = this.CS(ids, ignoredTypes, lengthLimit, direction, true).nodes.size();
+        return Stream.of(new LongOup(n));
+    }
+
+    /**
+     * finds only the nodes of the common up/down/undirected target/regulator
+     *
+     * @param ids          database ids of nodes
+     * @param ignoredTypes list of strings which are ignored types
+     * @return Stream<Output>
+     */
+    @Procedure(value = "commonStreamCount", mode = Mode.WRITE)
+    @Description("finds only the nodes of the common up/down/undirected target/regulator")
+    public Stream<Output> commonStreamCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
+                                             @Name("lengthLimit") long lengthLimit, @Name("direction") long direction) {
+        return Stream.of(this.CS(ids, ignoredTypes, lengthLimit, direction, true));
+    }
+
+    private Output GoI(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected, boolean isOnlyNode) {
         HashSet<Long> idSet = new HashSet<>(ids);
         HashMap<Long, LabelData> edgeLabels = new HashMap<>();
         HashMap<Long, LabelData> nodeLabels = new HashMap<>();
@@ -72,25 +142,27 @@ public class AdvancedQuery {
         for (Long nodeId : r.nodes) {
             o.nodes.add(this.db.getNodeById(nodeId));
         }
+        if (isOnlyNode) {
+            return o;
+        }
         for (Long edgeId : r.edges) {
             o.edges.add(this.db.getRelationshipById(edgeId));
         }
-        return Stream.of(o);
+        return o;
     }
 
-    /**
-     * finds the common up/down/undirected target/regulator
-     *
-     * @param ids          database ids of nodes
+    /** find common stream (up/down/undirected)
+     * @param ids database ids of nodes
      * @param ignoredTypes list of strings which are ignored types
-     * @return Stream<Output>
+     * @param lengthLimit maximum depth
+     * @param direction should be 0 or 1
+     * @param isOnlyNode if true, returns only nodes
+     * @return
      */
-    @Procedure(value = "commonStream", mode = Mode.WRITE)
-    @Description("From specified nodes forms founds common upstream/downstream (target/regulator)")
-    public Stream<Output> commonStream(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                       @Name("lengthLimit") Long lengthLimit, @Name("direction") long direction) {
+    private Output CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction, boolean isOnlyNode) {
 
-        Output oup = new Output(new ArrayList<>(), new ArrayList<>());
+        HashSet<Long> resultNodes = new HashSet<>();
+        HashSet<Long> resultEdges = new HashSet<>();
 
         HashSet<Long> candidates = new HashSet<>();
         HashMap<Long, Integer> node2Reached = new HashMap<>();
@@ -102,11 +174,31 @@ public class AdvancedQuery {
         for (long id : candidates) {
             Integer i = node2Reached.get(id);
             if (i != null && i == size) {
-                oup.nodes.add(this.db.getNodeById(id));
+                resultNodes.add(id);
             }
         }
 
-        return Stream.of(oup);
+        HashSet<Long> resultNodes2 = new HashSet<>(resultNodes);
+
+        for (Long id : ids) {
+            for (long id2 : resultNodes2) {
+                String cql = "MATCH p=(n1)-[*1.." + lengthLimit + "]-(n2) where ID(n1)=" + id + " AND ID(n2)=" + id2 + " return nodes(p) as nodes, relationships(p) as edges;";
+                Result res = this.db.execute(cql);
+                while (res.hasNext()) {
+                    Map<String, Object> r = res.next();
+                    List<Relationship> edges = (List<Relationship>) r.get("edges");
+                    List<Node> nodes = (List<Node>) r.get("nodes");
+                    if (!isOnlyNode) {
+                        resultEdges.addAll(edges.stream().map(Relationship::getId).collect(Collectors.toSet()));
+                    }
+                    resultNodes.addAll(nodes.stream().map(Node::getId).collect(Collectors.toSet()));
+                }
+            }
+        }
+
+        List<Node> l1 = resultNodes.stream().map(x -> this.db.getNodeById(x)).collect(Collectors.toList());
+        List<Relationship> l2 = resultEdges.stream().map(x -> this.db.getRelationshipById(x)).collect(Collectors.toList());
+        return new Output(l1, l2);
     }
 
     /**
@@ -370,6 +462,14 @@ public class AdvancedQuery {
         Output(List<Node> nodes, List<Relationship> edges) {
             this.nodes = nodes;
             this.edges = edges;
+        }
+    }
+
+    public class LongOup {
+        public long out;
+
+        public LongOup(long n) {
+            this.out = n;
         }
     }
 
