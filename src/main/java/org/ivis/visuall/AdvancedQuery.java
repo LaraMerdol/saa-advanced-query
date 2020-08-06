@@ -1,17 +1,12 @@
 package org.ivis.visuall;
 
+import org.neo4j.graphdb.*;
+import org.neo4j.logging.Log;
+import org.neo4j.procedure.*;
+
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.neo4j.graphdb.*;
-import org.neo4j.procedure.Context;
-import org.neo4j.procedure.Procedure;
-import org.neo4j.procedure.Description;
-import org.neo4j.procedure.Mode;
-import org.neo4j.procedure.Name;
-
-import org.neo4j.logging.Log;
 
 public class AdvancedQuery {
     // This field declares that we need a GraphDatabaseService
@@ -34,22 +29,11 @@ public class AdvancedQuery {
     @Procedure(value = "graphOfInterest", mode = Mode.WRITE)
     @Description("finds the minimal sub-graph from given nodes")
     public Stream<Output> graphOfInterest(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                          @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected) {
-        return Stream.of(GoI(ids, ignoredTypes, lengthLimit, isDirected, false));
-    }
-
-    /**
-     * returns only the nodes of the minimal sub-graph
-     *
-     * @param ids          database ids of nodes
-     * @param ignoredTypes list of strings which are ignored types
-     * @return Stream<Output>
-     */
-    @Procedure(value = "graphOfInterest4Table", mode = Mode.WRITE)
-    @Description("returns only the nodes of the minimal sub-graph")
-    public Stream<Output> graphOfInterest4Table(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                                @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected) {
-        return Stream.of(GoI(ids, ignoredTypes, lengthLimit, isDirected, true));
+                                          @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
+                                          @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
+                                          @Name("orderBy") String orderBy, @Name("orderDir") long orderDir) {
+        BFSOutput o1 = GoI(ids, ignoredTypes, lengthLimit, isDirected, false);
+        return Stream.of(this.tableFiltering(o1, pageSize, currPage, filterTxt, isIgnoreCase, orderBy, orderDir));
     }
 
     /**
@@ -77,23 +61,11 @@ public class AdvancedQuery {
     @Procedure(value = "commonStream", mode = Mode.WRITE)
     @Description("From specified nodes forms founds common upstream/downstream (target/regulator)")
     public Stream<Output> commonStream(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                       @Name("lengthLimit") long lengthLimit, @Name("direction") long direction) {
-        return Stream.of(this.CS(ids, ignoredTypes, lengthLimit, direction, false));
-    }
-
-    /**
-     * finds only the nodes of the common up/down/undirected target/regulator
-     *
-     * @param ids          database ids of nodes
-     * @param ignoredTypes list of strings which are ignored types
-     * @return Stream<Output>
-     */
-    @Procedure(value = "commonStream4Table", mode = Mode.WRITE)
-    @Description("finds only the nodes of the common up/down/undirected target/regulator")
-    public Stream<LongOup> commonStream4Table(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                             @Name("lengthLimit") long lengthLimit, @Name("direction") long direction) {
-        long n = this.CS(ids, ignoredTypes, lengthLimit, direction, true).nodes.size();
-        return Stream.of(new LongOup(n));
+                                       @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
+                                       @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
+                                       @Name("orderBy") String orderBy, @Name("orderDir") long orderDir) {
+        BFSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, false);
+        return Stream.of(this.tableFiltering(o1, pageSize, currPage, filterTxt, isIgnoreCase, orderBy, orderDir));
     }
 
     /**
@@ -105,12 +77,91 @@ public class AdvancedQuery {
      */
     @Procedure(value = "commonStreamCount", mode = Mode.WRITE)
     @Description("finds only the nodes of the common up/down/undirected target/regulator")
-    public Stream<Output> commonStreamCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                             @Name("lengthLimit") long lengthLimit, @Name("direction") long direction) {
-        return Stream.of(this.CS(ids, ignoredTypes, lengthLimit, direction, true));
+    public Stream<LongOup> commonStreamCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
+                                            @Name("lengthLimit") long lengthLimit, @Name("direction") long direction) {
+        long n = this.CS(ids, ignoredTypes, lengthLimit, direction, true).nodes.size();
+        return Stream.of(new LongOup(n));
     }
 
-    private Output GoI(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected, boolean isOnlyNode) {
+    private Output tableFiltering(BFSOutput o, long pageSize, long currPage, String filterTxt, boolean isIgnoreCase, String orderBy, long orderDir) {
+        Output r = new Output(new ArrayList<>(), new ArrayList<>());
+
+        // filter by text
+        if (filterTxt != null && filterTxt.length() > 0) {
+            if (isIgnoreCase) {
+                filterTxt = filterTxt.toLowerCase();
+            }
+            for (long id : o.nodes) {
+                Node n = this.db.getNodeById(id);
+                List<String> l = n.getAllProperties().values().stream().map(Object::toString).collect(Collectors.toList());
+                boolean isPassed = false;
+                for (String s : l) {
+                    if (isIgnoreCase) {
+                        if (s.toLowerCase().contains(filterTxt)) {
+                            isPassed = true;
+                            break;
+                        }
+                    } else {
+                        if (s.contains(filterTxt)) {
+                            isPassed = true;
+                            break;
+                        }
+                    }
+                }
+                if (isPassed) {
+                    r.nodes.add(n);
+                }
+            }
+        } else {
+            for (long id : o.nodes) {
+                r.nodes.add(this.db.getNodeById(id));
+            }
+        }
+
+        // sort and paginate
+        OrderDirection dir = num2OrderDir(orderDir);
+        if (orderBy != null && dir != OrderDirection.NONE) {
+            r.nodes.sort((n1, n2) -> {
+                Object o1 = n1.getProperty(orderBy);
+                Object o2 = n2.getProperty(orderBy);
+
+                if (o1.getClass() == Integer.class) {
+                    return ((Integer) o1).compareTo((Integer) o2);
+                } else if (o1.getClass() == String.class) {
+                    return ((String) o1).compareTo((String) o2);
+                } else if (o1.getClass() == Double.class) {
+                    return ((Double) o1).compareTo((Double) o2);
+                } else if (o1.getClass() == Float.class) {
+                    return ((Float) o1).compareTo((Float) o2);
+                }
+                return 0;
+            });
+            if (dir == OrderDirection.DESC) {
+                Collections.reverse(r.nodes);
+            }
+        }
+        int fromIdx = (int) ((currPage - 1) * pageSize);
+        int nodeCount = r.nodes.size();
+        if (fromIdx < 0 || fromIdx >= nodeCount) {
+            fromIdx = 0;
+        }
+        int toIdx = (int) (currPage * pageSize);
+        if (toIdx < 0 || toIdx > r.nodes.size()) {
+            toIdx = r.nodes.size();
+        }
+        r.nodes = r.nodes.subList(fromIdx, toIdx);
+
+        // get edges of sorted/paginated/filtered nodes
+        for (long edgeId : o.edges) {
+            Relationship e = this.db.getRelationshipById(edgeId);
+            if (r.nodes.contains(e.getEndNode()) && r.nodes.contains(e.getStartNode())) {
+                r.edges.add(e);
+            }
+        }
+        return r;
+    }
+
+    private BFSOutput GoI(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected, boolean isOnlyNode) {
         HashSet<Long> idSet = new HashSet<>(ids);
         HashMap<Long, LabelData> edgeLabels = new HashMap<>();
         HashMap<Long, LabelData> nodeLabels = new HashMap<>();
@@ -138,28 +189,25 @@ public class AdvancedQuery {
         r = this.removeOrphanEdges(r);
         this.purify(idSet, r);
         r = this.removeOrphanEdges(r);
-        Output o = new Output(new ArrayList<>(), new ArrayList<>());
-        for (Long nodeId : r.nodes) {
-            o.nodes.add(this.db.getNodeById(nodeId));
-        }
+
         if (isOnlyNode) {
-            return o;
+            r.edges.clear();
+            return r;
         }
-        for (Long edgeId : r.edges) {
-            o.edges.add(this.db.getRelationshipById(edgeId));
-        }
-        return o;
+        return r;
     }
 
-    /** find common stream (up/down/undirected)
-     * @param ids database ids of nodes
+    /**
+     * find common stream (up/down/undirected)
+     *
+     * @param ids          database ids of nodes
      * @param ignoredTypes list of strings which are ignored types
-     * @param lengthLimit maximum depth
-     * @param direction should be 0 or 1
-     * @param isOnlyNode if true, returns only nodes
-     * @return
+     * @param lengthLimit  maximum depth
+     * @param direction    should be 0 or 1
+     * @param isOnlyNode   if true, returns only nodes
+     * @return Outputs a list of nodes and edges (Cypher does not accept HashSet)
      */
-    private Output CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction, boolean isOnlyNode) {
+    private BFSOutput CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction, boolean isOnlyNode) {
 
         HashSet<Long> resultNodes = new HashSet<>();
         HashSet<Long> resultEdges = new HashSet<>();
@@ -196,9 +244,7 @@ public class AdvancedQuery {
             }
         }
 
-        List<Node> l1 = resultNodes.stream().map(x -> this.db.getNodeById(x)).collect(Collectors.toList());
-        List<Relationship> l2 = resultEdges.stream().map(x -> this.db.getRelationshipById(x)).collect(Collectors.toList());
-        return new Output(l1, l2);
+        return new BFSOutput(resultNodes, resultEdges);
     }
 
     /**
@@ -272,6 +318,23 @@ public class AdvancedQuery {
             d = Direction.OUTGOING; // means downstream
         } else if (n == 1) {
             d = Direction.INCOMING; // means upstream
+        }
+        return d;
+    }
+
+    /**
+     * map number to order direction, 0: OUTGOING (downstream), 1: INCOMING (upstream), 2:
+     * BOTH
+     *
+     * @param n number for enum
+     * @return OrderDirection
+     */
+    private OrderDirection num2OrderDir(long n) {
+        OrderDirection d = OrderDirection.NONE;
+        if (n == 0) {
+            d = OrderDirection.ASC;
+        } else if (n == 1) {
+            d = OrderDirection.DESC;
         }
         return d;
     }
@@ -455,7 +518,7 @@ public class AdvancedQuery {
         return orphanNodes;
     }
 
-    public class Output {
+    public static class Output {
         public List<Node> nodes;
         public List<Relationship> edges;
 
@@ -465,7 +528,7 @@ public class AdvancedQuery {
         }
     }
 
-    public class LongOup {
+    public static class LongOup {
         public long out;
 
         public LongOup(long n) {
@@ -473,7 +536,7 @@ public class AdvancedQuery {
         }
     }
 
-    public class BFSOutput {
+    public static class BFSOutput {
         public HashSet<Long> nodes;
         public HashSet<Long> edges;
 
@@ -483,7 +546,7 @@ public class AdvancedQuery {
         }
     }
 
-    public class LabelData {
+    public static class LabelData {
         public long fwd;
         public long rev;
 
@@ -516,4 +579,12 @@ public class AdvancedQuery {
         }
     }
 
+    public enum OrderDirection {
+        // ascending
+        ASC,
+        // descending
+        DESC,
+        // no ordering
+        NONE
+    }
 }
