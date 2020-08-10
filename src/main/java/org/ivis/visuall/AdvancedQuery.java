@@ -159,7 +159,19 @@ public class AdvancedQuery {
             }
             for (long id : o.nodes) {
                 Node n = this.db.getNodeById(id);
-                List<String> l = n.getAllProperties().values().stream().map(Object::toString).collect(Collectors.toList());
+                List<String> l = new ArrayList<>();
+                for (Object p : n.getAllProperties().values()) {
+                    if (p.getClass().isArray()) {
+                        String s = "";
+                        for (Object o2: ((Object[]) p)) {
+                            s += o2.toString();
+                        }
+                        l.add(s);
+                    } else {
+                        l.add(p.toString());
+                    }
+                }
+
                 boolean isPassed = false;
                 for (String s : l) {
                     if (isIgnoreCase) {

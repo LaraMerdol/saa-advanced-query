@@ -573,6 +573,23 @@ public class AdvancedQueryTest {
         }
     }
 
+    @Test
+    public void txtFilterTest() {
+        // This is in a try-block, to make sure we close the driver after the test
+        try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+             Session session = driver.session()) {
+            // And given I have a node in the database
+            session.run(
+                    "CREATE (n1:Person {name:'n1', primary_profession: ['actress', 'soundtrack'], age: 35}) CREATE (n2:Person {age: 29, name:'n2', primary_profession: ['actor', 'soundtrack']});");
+
+            // Then I can search for that node with lucene query syntax
+            StatementResult result = session
+                    .run("CALL graphOfInterestCount([1], [], 2, false, 'actress', false) YIELD out return out");
+
+            // assertThat(result.single().get("out").asInt()).isEqualTo(0);
+        }
+    }
+
     private String readFile(String filePath) {
         StringBuilder contentBuilder = new StringBuilder();
 
