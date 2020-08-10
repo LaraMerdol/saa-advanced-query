@@ -200,7 +200,7 @@ public class AdvancedQueryTest {
              Session session = driver.session()) {
             // And given I have a node in the database
 
-            String s = this.readFile("C:\\dev\\visuall-advanced-query\\src\\test\\java\\org\\ivis\\visuall\\imdb100.cypher").replaceAll("\n", "");
+            String s = this.readFile("src\\test\\java\\org\\ivis\\visuall\\imdb100.cypher").replaceAll("\n", "");
             String[] arr = s.split(";");
             for (String cql : arr) {
                 session.run(cql);
@@ -230,7 +230,7 @@ public class AdvancedQueryTest {
              Session session = driver.session()) {
             // And given I have a node in the database
 
-            String s = this.readFile("C:\\dev\\visuall-advanced-query\\src\\test\\java\\org\\ivis\\visuall\\imdb100.cypher").replaceAll("\n", "");
+            String s = this.readFile("src\\test\\java\\org\\ivis\\visuall\\imdb100.cypher").replaceAll("\n", "");
             String[] arr = s.split(";");
             for (String cql : arr) {
                 session.run(cql);
@@ -260,7 +260,7 @@ public class AdvancedQueryTest {
              Session session = driver.session()) {
             // And given I have a node in the database
 
-            String s = this.readFile("C:\\dev\\visuall-advanced-query\\src\\test\\java\\org\\ivis\\visuall\\sofDB.cypher").replaceAll("\n", "");
+            String s = this.readFile("src\\test\\java\\org\\ivis\\visuall\\sofDB.cypher").replaceAll("\n", "");
             String[] arr = s.split(";");
             for (String cql : arr) {
                 session.run(cql);
