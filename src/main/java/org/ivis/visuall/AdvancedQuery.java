@@ -46,9 +46,12 @@ public class AdvancedQuery {
     @Procedure(value = "graphOfInterestCount", mode = Mode.WRITE)
     @Description("returns only the count of nodes of the minimal sub-graph")
     public Stream<LongOup> graphOfInterestCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                                @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected) {
-        long n = GoI(ids, ignoredTypes, lengthLimit, isDirected, true).nodes.size();
-        return Stream.of(new LongOup(n));
+                                                @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
+                                                @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase) {
+
+        BFSOutput o = GoI(ids, ignoredTypes, lengthLimit, isDirected, true);
+        Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
+        return Stream.of(new LongOup(r.nodes.size()));
     }
 
     /**
@@ -78,50 +81,23 @@ public class AdvancedQuery {
     @Procedure(value = "commonStreamCount", mode = Mode.WRITE)
     @Description("finds only the nodes of the common up/down/undirected target/regulator")
     public Stream<LongOup> commonStreamCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                            @Name("lengthLimit") long lengthLimit, @Name("direction") long direction) {
-        long n = this.CS(ids, ignoredTypes, lengthLimit, direction, true).nodes.size();
-        return Stream.of(new LongOup(n));
+                                             @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
+                                             @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase) {
+        BFSOutput o = this.CS(ids, ignoredTypes, lengthLimit, direction, true);
+        Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
+        return Stream.of(new LongOup(r.nodes.size()));
     }
 
     private Output tableFiltering(BFSOutput o, long pageSize, long currPage, String filterTxt, boolean isIgnoreCase, String orderBy, long orderDir) {
-        Output r = new Output(new ArrayList<>(), new ArrayList<>());
-
-        // filter by text
-        if (filterTxt != null && filterTxt.length() > 0) {
-            if (isIgnoreCase) {
-                filterTxt = filterTxt.toLowerCase();
-            }
-            for (long id : o.nodes) {
-                Node n = this.db.getNodeById(id);
-                List<String> l = n.getAllProperties().values().stream().map(Object::toString).collect(Collectors.toList());
-                boolean isPassed = false;
-                for (String s : l) {
-                    if (isIgnoreCase) {
-                        if (s.toLowerCase().contains(filterTxt)) {
-                            isPassed = true;
-                            break;
-                        }
-                    } else {
-                        if (s.contains(filterTxt)) {
-                            isPassed = true;
-                            break;
-                        }
-                    }
-                }
-                if (isPassed) {
-                    r.nodes.add(n);
-                }
-            }
-        } else {
-            for (long id : o.nodes) {
-                r.nodes.add(this.db.getNodeById(id));
-            }
-        }
+        Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
 
         // sort and paginate
         OrderDirection dir = num2OrderDir(orderDir);
         if (orderBy != null && dir != OrderDirection.NONE) {
             r.nodes.sort((n1, n2) -> {
+                if (!n1.hasProperty(orderBy) || !n2.hasProperty(orderBy)) {
+                    return 0;
+                }
                 Object o1 = n1.getProperty(orderBy);
                 Object o2 = n2.getProperty(orderBy);
 
@@ -151,11 +127,60 @@ public class AdvancedQuery {
         }
         r.nodes = r.nodes.subList(fromIdx, toIdx);
 
-        // get edges of sorted/paginated/filtered nodes
+        // get all edges
         for (long edgeId : o.edges) {
             Relationship e = this.db.getRelationshipById(edgeId);
-            if (r.nodes.contains(e.getEndNode()) && r.nodes.contains(e.getStartNode())) {
-                r.edges.add(e);
+            r.edges.add(e);
+            r.edgeClass.add(e.getType().name());
+            r.edgeId.add(edgeId);
+            long src = e.getStartNodeId();
+            long tgt = e.getEndNodeId();
+            ArrayList<Long> l = new ArrayList<>();
+            l.add(src);
+            l.add(tgt);
+            r.edgeSourceTargets.add(l);
+        }
+
+        // set meta properties for nodes
+        for (Node n : r.nodes) {
+            r.nodeClass.add(n.getLabels().iterator().next().name());
+            r.nodeId.add(n.getId());
+        }
+
+        return r;
+    }
+
+    private Output filterByTxt(BFSOutput o, String filterTxt, boolean isIgnoreCase) {
+        Output r = new Output();
+        // filter by text
+        if (filterTxt != null && filterTxt.length() > 0) {
+            if (isIgnoreCase) {
+                filterTxt = filterTxt.toLowerCase();
+            }
+            for (long id : o.nodes) {
+                Node n = this.db.getNodeById(id);
+                List<String> l = n.getAllProperties().values().stream().map(Object::toString).collect(Collectors.toList());
+                boolean isPassed = false;
+                for (String s : l) {
+                    if (isIgnoreCase) {
+                        if (s.toLowerCase().contains(filterTxt)) {
+                            isPassed = true;
+                            break;
+                        }
+                    } else {
+                        if (s.contains(filterTxt)) {
+                            isPassed = true;
+                            break;
+                        }
+                    }
+                }
+                if (isPassed) {
+                    r.nodes.add(n);
+                }
+            }
+        } else {
+            for (long id : o.nodes) {
+                r.nodes.add(this.db.getNodeById(id));
             }
         }
         return r;
@@ -520,11 +545,22 @@ public class AdvancedQuery {
 
     public static class Output {
         public List<Node> nodes;
-        public List<Relationship> edges;
+        public List<String> nodeClass;
+        public List<Long> nodeId;
 
-        Output(List<Node> nodes, List<Relationship> edges) {
-            this.nodes = nodes;
-            this.edges = edges;
+        public List<Relationship> edges;
+        public List<String> edgeClass;
+        public List<Long> edgeId;
+        public List<List<Long>> edgeSourceTargets;
+
+        Output() {
+            this.nodes = new ArrayList<>();
+            this.edges = new ArrayList<>();
+            this.nodeClass = new ArrayList<>();
+            this.edgeClass = new ArrayList<>();
+            this.nodeId = new ArrayList<>();
+            this.edgeId = new ArrayList<>();
+            edgeSourceTargets = new ArrayList<>();
         }
     }
 
