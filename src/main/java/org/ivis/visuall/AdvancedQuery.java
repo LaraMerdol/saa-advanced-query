@@ -124,12 +124,15 @@ public class AdvancedQuery {
         }
         int fromIdx = (int) ((currPage - 1) * pageSize);
         int nodeCount = r.nodes.size();
-        if (fromIdx < 0 || fromIdx >= nodeCount) {
+        if (fromIdx >= nodeCount) {
+            fromIdx = nodeCount;
+        }
+        if (fromIdx < 0) {
             fromIdx = 0;
         }
         int toIdx = (int) (currPage * pageSize);
-        if (toIdx < 0 || toIdx > r.nodes.size()) {
-            toIdx = r.nodes.size();
+        if (toIdx < 0 || toIdx > nodeCount) {
+            toIdx = nodeCount;
         }
         r.nodes = r.nodes.subList(fromIdx, toIdx);
 
