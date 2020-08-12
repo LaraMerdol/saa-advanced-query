@@ -446,7 +446,7 @@ public class AdvancedQuery {
                               HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir, boolean isDirected) {
         HashSet<Long> nodeSet = new HashSet<>();
         HashSet<Long> edgeSet = new HashSet<>();
-        HashSet<Long> visitedNodes = new HashSet<>();
+        HashSet<Long> visitedEdges = new HashSet<>();
 
         // prepare queue
         Queue<Long> queue = new LinkedList<>(ids);
@@ -455,7 +455,7 @@ public class AdvancedQuery {
 
         while (!queue.isEmpty()) {
             long n1 = queue.remove();
-            visitedNodes.add(n1);
+
             Direction d = dir;
             if (!isDirected) {
                 d = Direction.BOTH;
@@ -465,9 +465,10 @@ public class AdvancedQuery {
                 long edgeId = e.getId();
                 Node n2 = e.getOtherNode(this.db.getNodeById(n1));
                 long n2Id = n2.getId();
-                if (this.isNodeIgnored(n2, ignoredTypes) || visitedNodes.contains(n2Id)) {
+                if (this.isNodeIgnored(n2, ignoredTypes) || visitedEdges.contains(edgeId)) {
                     continue;
                 }
+                visitedEdges.add(edgeId);
                 LabelData labelE = edgeLabels.get(edgeId);
                 if (labelE == null) {
                     labelE = new LabelData(lengthLimit + 1);

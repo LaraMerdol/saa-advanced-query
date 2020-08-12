@@ -546,7 +546,7 @@ public class AdvancedQueryTest {
             StatementResult result = session
                     .run("CALL commonStream([1,2,3], [], 1, 0, 100, 1, null, false, null, 2) YIELD nodes, edges return nodes, edges");
 
-            assertThat(result.single().get("nodes").asList().size()).isEqualTo(0);
+            assertThat(result.single().get("nodes").asList().size()).isEqualTo(3);
         }
     }
 
@@ -569,7 +569,7 @@ public class AdvancedQueryTest {
             StatementResult result = session
                     .run("CALL commonStream([1,2,3], [], 2, 1, 100, 1, null, false, null, 2) YIELD nodes, edges return nodes, edges");
 
-            assertThat(result.single().get("nodes").asList().size()).isEqualTo(0);
+            assertThat(result.single().get("nodes").asList().size()).isEqualTo(3);
         }
     }
 
