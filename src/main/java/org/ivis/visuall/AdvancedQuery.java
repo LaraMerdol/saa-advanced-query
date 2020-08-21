@@ -40,8 +40,9 @@ public class AdvancedQuery {
                                           @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
                                           @Name("orderBy") String orderBy, @Name("orderDir") long orderDir) {
         BFSOutput o1 = GoI(ids, ignoredTypes, lengthLimit, isDirected, false);
-        Output o2 = this.tableFiltering(o1, pageSize, currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
-        this.addSourceNodes(o2, ids, pageSize);
+        o1.nodes.removeIf(ids::contains);
+        Output o2 = this.tableFiltering(o1, pageSize - ids.size(), currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
+        this.addSourceNodes(o2, ids);
         return Stream.of(o2);
     }
 
@@ -63,8 +64,9 @@ public class AdvancedQuery {
                                                 @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase) {
 
         BFSOutput o = GoI(ids, ignoredTypes, lengthLimit, isDirected, true);
+        o.nodes.removeIf(ids::contains);
         Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
-        this.addSourceNodes(r, ids, -1);
+        this.addSourceNodes(r, ids);
         return Stream.of(new LongOup(r.nodes.size()));
     }
 
@@ -90,8 +92,9 @@ public class AdvancedQuery {
                                        @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
                                        @Name("orderBy") String orderBy, @Name("orderDir") long orderDir) {
         BFSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, false);
-        Output o2 = this.tableFiltering(o1, pageSize, currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
-        this.addSourceNodes(o2, ids, pageSize);
+        o1.nodes.removeIf(ids::contains);
+        Output o2 = this.tableFiltering(o1, pageSize - ids.size(), currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
+        this.addSourceNodes(o2, ids);
         return Stream.of(o2);
     }
 
@@ -112,8 +115,9 @@ public class AdvancedQuery {
                                              @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
                                              @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase) {
         BFSOutput o = this.CS(ids, ignoredTypes, lengthLimit, direction, true);
+        o.nodes.removeIf(ids::contains);
         Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
-        this.addSourceNodes(r, ids, -1);
+        this.addSourceNodes(r, ids);
         return Stream.of(new LongOup(r.nodes.size()));
     }
 
@@ -250,30 +254,9 @@ public class AdvancedQuery {
         return r;
     }
 
-    private void addSourceNodes(Output o, List<Long> ids, long pageSize) {
-        ArrayList<Long> missingIds = new ArrayList<>();
-        for (long id : ids) {
-            if (!o.nodeId.contains(id)) {
-                missingIds.add(id);
-            }
-        }
-        long removeCnt = o.nodeId.size() + missingIds.size() - pageSize;
-        if (pageSize == -1) {
-            removeCnt = -1;
-        }
-        // remove last elements
-        for (int i = 0; i < removeCnt; i++) {
-            if (o.nodeId.size() < 1) {
-                break;
-            }
-            int idx = o.nodeId.size() - 1;
-            o.nodeId.remove(idx);
-            o.nodes.remove(idx);
-            o.nodeClass.remove(idx);
-        }
-
+    private void addSourceNodes(Output o, List<Long> ids) {
         // insert source nodes
-        for (long id : missingIds) {
+        for (long id : ids) {
             Node n = this.db.getNodeById(id);
             o.nodeId.add(id);
             o.nodes.add(n);
@@ -349,10 +332,10 @@ public class AdvancedQuery {
         HashMap<Long, LabelData> edgeLabels = new HashMap<>();
         HashMap<Long, LabelData> nodeLabels = new HashMap<>();
         for (Long id : ids) {
-            nodeLabels.put(id, new LabelData(0, 0));
+            nodeLabels.put(id, new LabelData(0, lengthLimit + 1));
         }
         for (Long id : resultNodes) {
-            nodeLabels.put(id, new LabelData(0, 0));
+            nodeLabels.put(id, new LabelData(lengthLimit + 1, 0));
         }
 
         BFSOutput o1;
@@ -387,6 +370,7 @@ public class AdvancedQuery {
             }
         }
         r.nodes.addAll(ids);
+        r.nodes.addAll(resultNodes);
         r = this.removeOrphanEdges(r);
         s1.addAll(resultNodes);
         this.purify(s1, r);
