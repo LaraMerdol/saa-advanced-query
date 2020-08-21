@@ -5,7 +5,6 @@ import org.neo4j.logging.Log;
 import org.neo4j.procedure.*;
 
 import java.util.*;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class AdvancedQuery {
@@ -22,9 +21,17 @@ public class AdvancedQuery {
     /**
      * finds the minimal sub-graph from given nodes
      *
-     * @param ids          database ids of nodes
-     * @param ignoredTypes list of strings which are ignored types
-     * @return Stream<Output>
+     * @param ids          node ids to find the minimal connected graph
+     * @param ignoredTypes node or edge types to be ignored
+     * @param lengthLimit  maximum length of a path between "ids"
+     * @param isDirected   is direction important?
+     * @param pageSize     return at maximum this number of nodes, always returns "ids"
+     * @param currPage     which page do yoy want to return
+     * @param filterTxt    filter results by text
+     * @param isIgnoreCase should ignore case in text filtering?
+     * @param orderBy      order elements by a property
+     * @param orderDir     order direction
+     * @return minimal sub-graph
      */
     @Procedure(value = "graphOfInterest", mode = Mode.WRITE)
     @Description("finds the minimal sub-graph from given nodes")
@@ -41,9 +48,13 @@ public class AdvancedQuery {
     /**
      * returns only the count of nodes of the minimal sub-graph
      *
-     * @param ids          database ids of nodes
-     * @param ignoredTypes list of strings which are ignored types
-     * @return Stream<Output>
+     * @param ids          node ids to find the minimal connected graph
+     * @param ignoredTypes node or edge types to be ignored
+     * @param lengthLimit  maximum length of a path between "ids"
+     * @param isDirected   is direction important?
+     * @param filterTxt    filter results by text
+     * @param isIgnoreCase should ignore case in text filtering?
+     * @return size of minimal sub-graph
      */
     @Procedure(value = "graphOfInterestCount", mode = Mode.WRITE)
     @Description("returns only the count of nodes of the minimal sub-graph")
@@ -58,11 +69,19 @@ public class AdvancedQuery {
     }
 
     /**
-     * finds the common up/down/undirected target/regulator
+     * finds common nodes and edges on the downstream or upstream or undirected stream
      *
-     * @param ids          database ids of nodes
-     * @param ignoredTypes list of strings which are ignored types
-     * @return Stream<Output>
+     * @param ids          node ids
+     * @param ignoredTypes node or edge types to be ignored
+     * @param lengthLimit  maximum depth
+     * @param direction    INCOMING means upstream (regulator), OUTGOING means downstream (target)
+     * @param pageSize     return at maximum this number of nodes, always returns "ids"
+     * @param currPage     which page do yoy want to return
+     * @param filterTxt    filter results by text
+     * @param isIgnoreCase should ignore case in text filtering?
+     * @param orderBy      order elements by a property
+     * @param orderDir     order direction
+     * @return sub-graph which contains sources and targets/regulators with paths between
      */
     @Procedure(value = "commonStream", mode = Mode.WRITE)
     @Description("From specified nodes forms founds common upstream/downstream (target/regulator)")
@@ -77,11 +96,15 @@ public class AdvancedQuery {
     }
 
     /**
-     * finds only the nodes of the common up/down/undirected target/regulator
+     * finds size of common nodes and edges on the downstream or upstream or undirected stream
      *
-     * @param ids          database ids of nodes
-     * @param ignoredTypes list of strings which are ignored types
-     * @return Stream<Output>
+     * @param ids          node ids
+     * @param ignoredTypes node or edge types to be ignored
+     * @param lengthLimit  maximum depth
+     * @param direction    INCOMING means upstream (regulator), OUTGOING means downstream (target)
+     * @param filterTxt    filter results by text
+     * @param isIgnoreCase should ignore case in text filtering?
+     * @return size of sub-graph which contains sources and targets/regulators with paths between
      */
     @Procedure(value = "commonStreamCount", mode = Mode.WRITE)
     @Description("finds only the nodes of the common up/down/undirected target/regulator")
@@ -94,6 +117,18 @@ public class AdvancedQuery {
         return Stream.of(new LongOup(r.nodes.size()));
     }
 
+    /**
+     * Since result could be big, gives results page by page
+     *
+     * @param o            to be paginated
+     * @param pageSize     size of a page
+     * @param currPage     current page to be returned
+     * @param filterTxt    filtering text
+     * @param isIgnoreCase should ignore case in text filtering?
+     * @param orderBy      order by a property
+     * @param orderDir     order direction
+     * @return a page of o
+     */
     private Output tableFiltering(BFSOutput o, long pageSize, long currPage, String filterTxt, boolean isIgnoreCase, String orderBy, long orderDir) {
         Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
 
@@ -159,6 +194,14 @@ public class AdvancedQuery {
         return r;
     }
 
+    /**
+     * filter by text using simple text matching
+     *
+     * @param o            to be filtered
+     * @param filterTxt    text for filtering
+     * @param isIgnoreCase should ignore case?
+     * @return filtered "o"
+     */
     private Output filterByTxt(BFSOutput o, String filterTxt, boolean isIgnoreCase) {
         Output r = new Output();
         // filter by text
@@ -287,13 +330,12 @@ public class AdvancedQuery {
     private BFSOutput CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction, boolean isOnlyNode) {
 
         HashSet<Long> resultNodes = new HashSet<>();
-        HashSet<Long> resultEdges = new HashSet<>();
 
         HashSet<Long> candidates = new HashSet<>();
         HashMap<Long, Integer> node2Reached = new HashMap<>();
         Direction d = this.num2Dir(direction);
         for (long id : ids) {
-            candidates.addAll(this.BFS(node2Reached, id, ignoredTypes, lengthLimit, d));
+            candidates.addAll(this.CS_BFS(node2Reached, id, ignoredTypes, lengthLimit, d));
         }
         int size = ids.size();
         for (long id : candidates) {
@@ -303,25 +345,52 @@ public class AdvancedQuery {
             }
         }
 
-        HashSet<Long> resultNodes2 = new HashSet<>(resultNodes);
-
+        HashSet<Long> s1 = new HashSet<>(ids);
+        HashMap<Long, LabelData> edgeLabels = new HashMap<>();
+        HashMap<Long, LabelData> nodeLabels = new HashMap<>();
         for (Long id : ids) {
-            for (long id2 : resultNodes2) {
-                String cql = "MATCH p=(n1)-[*1.." + lengthLimit + "]-(n2) where ID(n1)=" + id + " AND ID(n2)=" + id2 + " return nodes(p) as nodes, relationships(p) as edges;";
-                Result res = this.db.execute(cql);
-                while (res.hasNext()) {
-                    Map<String, Object> r = res.next();
-                    List<Relationship> edges = (List<Relationship>) r.get("edges");
-                    List<Node> nodes = (List<Node>) r.get("nodes");
-                    if (!isOnlyNode) {
-                        resultEdges.addAll(edges.stream().map(Relationship::getId).collect(Collectors.toSet()));
-                    }
-                    resultNodes.addAll(nodes.stream().map(Node::getId).collect(Collectors.toSet()));
+            nodeLabels.put(id, new LabelData(0, 0));
+        }
+        for (Long id : resultNodes) {
+            nodeLabels.put(id, new LabelData(0, 0));
+        }
+
+        BFSOutput o1;
+        BFSOutput o2;
+        if (d == Direction.OUTGOING) { // means common target
+            o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true);
+            o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true);
+        } else if (d == Direction.INCOMING) { // means common regulator
+            o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true);
+            o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true);
+        } else {
+            o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, false);
+            o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, false);
+        }
+
+        // merge result sets
+        o1.edges.addAll(o2.edges);
+        o1.nodes.addAll(o2.nodes);
+
+        BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
+        if (!isOnlyNode) {
+            for (long edgeId : o1.edges) {
+                if (edgeLabels.get(edgeId).fwd + edgeLabels.get(edgeId).rev <= lengthLimit) {
+                    r.edges.add(edgeId);
                 }
             }
         }
 
-        return new BFSOutput(resultNodes, resultEdges);
+        for (long nodeId : o1.nodes) {
+            if (nodeLabels.get(nodeId).fwd + nodeLabels.get(nodeId).rev <= lengthLimit) {
+                r.nodes.add(nodeId);
+            }
+        }
+        r.nodes.addAll(ids);
+        r = this.removeOrphanEdges(r);
+        s1.addAll(resultNodes);
+        this.purify(s1, r);
+        return this.removeOrphanEdges(r);
     }
 
     /**
@@ -332,8 +401,8 @@ public class AdvancedQuery {
      * @param dir          direction of BFS
      * @return HashSet<Long>
      */
-    private HashSet<Long> BFS(HashMap<Long, Integer> node2Reached, long nodeId, List<String> ignoredTypes,
-                              long depthLimit, Direction dir) {
+    private HashSet<Long> CS_BFS(HashMap<Long, Integer> node2Reached, long nodeId, List<String> ignoredTypes,
+                                 long depthLimit, Direction dir) {
         HashSet<Long> visitedNodes = new HashSet<>();
         visitedNodes.add(nodeId);
 
@@ -436,11 +505,16 @@ public class AdvancedQuery {
     }
 
     /**
-     * @param ids          a list of node ids
-     * @param ignoredTypes list of strings which are ignored types
-     * @param lengthLimit  maximum length of a path between ids in sub graph
-     * @param dir          should be INCOMING or OUTGOING
-     * @return Output
+     * breadth-first search for graph of interest. keeps "fwd" and "rev" data for each node and edge as "LabelData"
+     *
+     * @param nodeLabels   labels for nodes, should be persist to next calls
+     * @param edgeLabels   labels for edges, should be persist to next calls
+     * @param ids          initial nodes for search
+     * @param ignoredTypes node or edge types to be ignored
+     * @param lengthLimit  maximum length of a path between "ids"
+     * @param dir          direction
+     * @param isDirected   is directed?
+     * @return graph elements visited
      */
     private BFSOutput GoI_BFS(HashMap<Long, LabelData> nodeLabels, HashMap<Long, LabelData> edgeLabels,
                               HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir, boolean isDirected) {
@@ -572,6 +646,12 @@ public class AdvancedQuery {
         map.put(key, set);
     }
 
+    /**
+     * remove edges that does not have source or target
+     *
+     * @param elms output from GoI_BFS
+     * @return output from GoI_BFS
+     */
     private BFSOutput removeOrphanEdges(BFSOutput elms) {
         BFSOutput result = new BFSOutput(elms.nodes, new HashSet<>());
 
