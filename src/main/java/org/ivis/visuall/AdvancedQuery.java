@@ -61,13 +61,16 @@ public class AdvancedQuery {
     @Description("returns only the count of nodes of the minimal sub-graph")
     public Stream<LongOup> graphOfInterestCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                                 @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
-                                                @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase) {
+                                                @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase, @Name("pageSize") long pageSize) {
 
         BFSOutput o = GoI(ids, ignoredTypes, lengthLimit, isDirected, true);
         o.nodes.removeIf(ids::contains);
         Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
         this.addSourceNodes(r, ids);
-        return Stream.of(new LongOup(r.nodes.size()));
+        int n = r.nodes.size();
+        int numPage = (int) Math.ceil((double) n / pageSize); // if we don't consider returning source nodes always
+        int numExtra4SrcNodes = (numPage - 1) * ids.size();
+        return Stream.of(new LongOup(n + numExtra4SrcNodes));
     }
 
     /**
@@ -113,12 +116,15 @@ public class AdvancedQuery {
     @Description("finds only the nodes of the common up/down/undirected target/regulator")
     public Stream<LongOup> commonStreamCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                              @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
-                                             @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase) {
+                                             @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase, @Name("pageSize") long pageSize) {
         BFSOutput o = this.CS(ids, ignoredTypes, lengthLimit, direction, true);
         o.nodes.removeIf(ids::contains);
         Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
         this.addSourceNodes(r, ids);
-        return Stream.of(new LongOup(r.nodes.size()));
+        int n = r.nodes.size();
+        int numPage = (int) Math.ceil((double) n / pageSize); // if we don't consider returning source nodes always
+        int numExtra4SrcNodes = (numPage - 1) * ids.size();
+        return Stream.of(new LongOup(n + numExtra4SrcNodes));
     }
 
     /**
