@@ -496,7 +496,7 @@ public class AdvancedQueryTest {
                     .run("CALL commonStream([1,2,3], [], 3, 1, 100, 1, null, false, null, 2) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
-            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
             Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
                     .collect(Collectors.toSet());
@@ -584,7 +584,7 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL graphOfInterestCount([1], [], 2, false, 'actress', false) YIELD out return out");
+                    .run("CALL graphOfInterestCount([1], [], 2, false, 'actress', false, 10) YIELD out return out");
 
             // assertThat(result.single().get("out").asInt()).isEqualTo(0);
         }

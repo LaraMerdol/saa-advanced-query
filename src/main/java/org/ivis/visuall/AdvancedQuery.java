@@ -90,15 +90,16 @@ public class AdvancedQuery {
      */
     @Procedure(value = "commonStream", mode = Mode.WRITE)
     @Description("From specified nodes forms founds common upstream/downstream (target/regulator)")
-    public Stream<Output> commonStream(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                       @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
-                                       @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
-                                       @Name("orderBy") String orderBy, @Name("orderDir") long orderDir) {
-        BFSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, false);
+    public Stream<CommonStreamOutput> commonStream(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
+                                                   @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
+                                                   @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
+                                                   @Name("orderBy") String orderBy, @Name("orderDir") long orderDir) {
+        CSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, false);
         o1.nodes.removeIf(ids::contains);
-        Output o2 = this.tableFiltering(o1, pageSize - ids.size(), currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
+        BFSOutput bfsOutput = new BFSOutput(o1.nodes, o1.edges);
+        Output o2 = this.tableFiltering(bfsOutput, pageSize - ids.size(), currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
         this.addSourceNodes(o2, ids);
-        return Stream.of(o2);
+        return Stream.of(new CommonStreamOutput(o2, new ArrayList<>(o1.targetRegulatorNodes)));
     }
 
     /**
@@ -117,9 +118,10 @@ public class AdvancedQuery {
     public Stream<LongOup> commonStreamCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                              @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
                                              @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase, @Name("pageSize") long pageSize) {
-        BFSOutput o = this.CS(ids, ignoredTypes, lengthLimit, direction, true);
+        CSOutput o = this.CS(ids, ignoredTypes, lengthLimit, direction, true);
         o.nodes.removeIf(ids::contains);
-        Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
+        BFSOutput bfsOutput = new BFSOutput(o.nodes, o.edges);
+        Output r = this.filterByTxt(bfsOutput, filterTxt, isIgnoreCase);
         this.addSourceNodes(r, ids);
         int n = r.nodes.size();
         int numPage = (int) Math.ceil((double) n / pageSize); // if we don't consider returning source nodes always
@@ -270,6 +272,16 @@ public class AdvancedQuery {
         }
     }
 
+    /**
+     * finds Graph of Interest from given node ids
+     *
+     * @param ids          source nodes to find the minimal sub-graph
+     * @param ignoredTypes list of strings which are ignored types
+     * @param lengthLimit  maximum left of a path between any 2 source nodes
+     * @param isDirected   is directed?
+     * @param isOnlyNode   should return only the nodes?
+     * @return a set of nodes and edges which is sub-graph
+     */
     private BFSOutput GoI(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected, boolean isOnlyNode) {
         HashSet<Long> idSet = new HashSet<>(ids);
         HashMap<Long, LabelData> edgeLabels = new HashMap<>();
@@ -316,7 +328,7 @@ public class AdvancedQuery {
      * @param isOnlyNode   if true, returns only nodes
      * @return Outputs a list of nodes and edges (Cypher does not accept HashSet)
      */
-    private BFSOutput CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction, boolean isOnlyNode) {
+    private CSOutput CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction, boolean isOnlyNode) {
 
         HashSet<Long> resultNodes = new HashSet<>();
 
@@ -334,22 +346,28 @@ public class AdvancedQuery {
             }
         }
 
-        HashSet<Long> s1 = new HashSet<>(ids);
         HashMap<Long, LabelData> edgeLabels = new HashMap<>();
         HashMap<Long, LabelData> nodeLabels = new HashMap<>();
-        for (Long id : ids) {
+        HashSet<Long> s1 = new HashSet<>(ids);
+
+        for (Long id : s1) {
             nodeLabels.put(id, new LabelData(0, lengthLimit + 1));
         }
         for (Long id : resultNodes) {
             nodeLabels.put(id, new LabelData(lengthLimit + 1, 0));
         }
 
-        BFSOutput o1;
-        BFSOutput o2;
+        BFSOutput o1, o2;
         if (d == Direction.OUTGOING) { // means common target
             o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true);
             o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true);
         } else if (d == Direction.INCOMING) { // means common regulator
+            for (Long id : s1) {
+                nodeLabels.put(id, new LabelData(lengthLimit + 1, 0));
+            }
+            for (Long id : resultNodes) {
+                nodeLabels.put(id, new LabelData(0, lengthLimit + 1));
+            }
             o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true);
             o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true);
         } else {
@@ -380,7 +398,8 @@ public class AdvancedQuery {
         r = this.removeOrphanEdges(r);
         s1.addAll(resultNodes);
         this.purify(s1, r);
-        return this.removeOrphanEdges(r);
+        r = this.removeOrphanEdges(r);
+        return new CSOutput(r.nodes, r.edges, resultNodes);
     }
 
     /**
@@ -683,7 +702,30 @@ public class AdvancedQuery {
             this.edgeClass = new ArrayList<>();
             this.nodeId = new ArrayList<>();
             this.edgeId = new ArrayList<>();
-            edgeSourceTargets = new ArrayList<>();
+            this.edgeSourceTargets = new ArrayList<>();
+        }
+    }
+
+    public static class CommonStreamOutput {
+        public List<Long> targetRegulatorNodeIds;
+        public List<Node> nodes;
+        public List<String> nodeClass;
+        public List<Long> nodeId;
+
+        public List<Relationship> edges;
+        public List<String> edgeClass;
+        public List<Long> edgeId;
+        public List<List<Long>> edgeSourceTargets;
+
+        CommonStreamOutput(Output o, List<Long> targetRegulatorNodeIds) {
+            this.nodes = o.nodes;
+            this.edges = o.edges;
+            this.nodeClass = o.nodeClass;
+            this.edgeClass = o.edgeClass;
+            this.nodeId = o.nodeId;
+            this.edgeId = o.edgeId;
+            this.edgeSourceTargets = o.edgeSourceTargets;
+            this.targetRegulatorNodeIds = targetRegulatorNodeIds;
         }
     }
 
@@ -702,6 +744,18 @@ public class AdvancedQuery {
         BFSOutput(HashSet<Long> nodes, HashSet<Long> edges) {
             this.nodes = nodes;
             this.edges = edges;
+        }
+    }
+
+    public static class CSOutput {
+        public HashSet<Long> nodes;
+        public HashSet<Long> edges;
+        public HashSet<Long> targetRegulatorNodes;
+
+        CSOutput(HashSet<Long> nodes, HashSet<Long> edges, HashSet<Long> targetRegulatorNodes) {
+            this.nodes = nodes;
+            this.edges = edges;
+            this.targetRegulatorNodes = targetRegulatorNodes;
         }
     }
 
