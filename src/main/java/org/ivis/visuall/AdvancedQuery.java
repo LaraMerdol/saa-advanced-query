@@ -38,9 +38,11 @@ public class AdvancedQuery {
     public Stream<Output> graphOfInterest(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                           @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
                                           @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
-                                          @Name("orderBy") String orderBy, @Name("orderDir") long orderDir) {
+                                          @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
+                                          @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime) {
         BFSOutput o1 = GoI(ids, ignoredTypes, lengthLimit, isDirected, false);
         o1.nodes.removeIf(ids::contains);
+        o1 = this.filterByDate(o1, startTime, endTime, timeMapping);
         Output o2 = this.tableFiltering(o1, pageSize - ids.size(), currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
         this.addSourceNodes(o2, ids);
         return Stream.of(o2);
@@ -61,10 +63,12 @@ public class AdvancedQuery {
     @Description("returns only the count of nodes of the minimal sub-graph")
     public Stream<LongOup> graphOfInterestCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                                 @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
-                                                @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase, @Name("pageSize") long pageSize) {
+                                                @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase, @Name("pageSize") long pageSize,
+                                                @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime) {
 
         BFSOutput o = GoI(ids, ignoredTypes, lengthLimit, isDirected, true);
         o.nodes.removeIf(ids::contains);
+        o = this.filterByDate(o, startTime, endTime, timeMapping);
         Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
         this.addSourceNodes(r, ids);
         int n = r.nodes.size();
@@ -93,10 +97,12 @@ public class AdvancedQuery {
     public Stream<CommonStreamOutput> commonStream(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                                    @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
                                                    @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
-                                                   @Name("orderBy") String orderBy, @Name("orderDir") long orderDir) {
+                                                   @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
+                                                   @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime) {
         CSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, false);
         o1.nodes.removeIf(ids::contains);
         BFSOutput bfsOutput = new BFSOutput(o1.nodes, o1.edges);
+        bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping);
         Output o2 = this.tableFiltering(bfsOutput, pageSize - ids.size(), currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
         this.addSourceNodes(o2, ids);
         return Stream.of(new CommonStreamOutput(o2, new ArrayList<>(o1.targetRegulatorNodes)));
@@ -117,10 +123,12 @@ public class AdvancedQuery {
     @Description("finds only the nodes of the common up/down/undirected target/regulator")
     public Stream<LongOup> commonStreamCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                              @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
-                                             @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase, @Name("pageSize") long pageSize) {
+                                             @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase, @Name("pageSize") long pageSize,
+                                             @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime) {
         CSOutput o = this.CS(ids, ignoredTypes, lengthLimit, direction, true);
         o.nodes.removeIf(ids::contains);
         BFSOutput bfsOutput = new BFSOutput(o.nodes, o.edges);
+        bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping);
         Output r = this.filterByTxt(bfsOutput, filterTxt, isIgnoreCase);
         this.addSourceNodes(r, ids);
         int n = r.nodes.size();
@@ -260,6 +268,70 @@ public class AdvancedQuery {
             }
         }
         return r;
+    }
+
+    /**
+     * filter by a datetime range
+     *
+     * @param o
+     * @param d1
+     * @param d2
+     * @param timeMapping
+     * @return
+     */
+    private BFSOutput filterByDate(BFSOutput o, long d1, long d2, Map<String, List<String>> timeMapping) {
+        if (d1 == d2) {
+            return o;
+        }
+        BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
+        for (long id : o.nodes) {
+            Node n = this.db.getNodeById(id);
+            String nodeType = n.getLabels().iterator().next().name();
+            List<String> l = timeMapping.get(nodeType);
+            if (l == null) {
+                r.nodes.add(id);
+            } else {
+                this.addIfInRange(id, d1, d2, n, l, r.nodes);
+            }
+        }
+
+        for (long id : o.edges) {
+            Relationship e = this.db.getRelationshipById(id);
+            String edgeType = e.getType().name();
+            List<String> l = timeMapping.get(edgeType);
+            if (l == null) {
+                r.edges.add(id);
+            } else {
+                this.addIfInRange(id, d1, d2, e, l, r.edges);
+            }
+        }
+        return r;
+    }
+
+    private void addIfInRange(long id, long d1, long d2, Entity e, List<String> propNames, HashSet<Long> set) {
+        String propStartName = propNames.get(0);
+        String propEndName = propNames.get(1);
+        boolean has1 = e.hasProperty(propStartName);
+        boolean has2 = e.hasProperty(propEndName);
+        if (!has1 && !has2) {
+            set.add(id);
+        } else if (!has1) {
+            long end = (long) e.getProperty(propEndName);
+            if (end < d2) {
+                set.add(id);
+            }
+        } else if (!has2) {
+            long start = (long) e.getProperty(propStartName);
+            if (start > d1) {
+                set.add(id);
+            }
+        } else {
+            long end = (long) e.getProperty(propEndName);
+            long start = (long) e.getProperty(propStartName);
+            if (start > d1 && end < d2) {
+                set.add(id);
+            }
+        }
     }
 
     private void addSourceNodes(Output o, List<Long> ids) {
