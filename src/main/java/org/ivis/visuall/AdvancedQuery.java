@@ -39,11 +39,18 @@ public class AdvancedQuery {
                                           @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
                                           @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
                                           @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
-                                          @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime) {
+                                          @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
+                                          @Name("inclusionType") long inclusionType) {
+        long executionStarted = System.nanoTime();
         BFSOutput o1 = GoI(ids, ignoredTypes, lengthLimit, isDirected, false);
+        this.endMeasuringTime("Graph of interest", executionStarted);
         o1.nodes.removeIf(ids::contains);
-        o1 = this.filterByDate(o1, startTime, endTime, timeMapping);
+        executionStarted = System.nanoTime();
+        o1 = this.filterByDate(o1, startTime, endTime, timeMapping, inclusionType);
+        this.endMeasuringTime("Filter by date", executionStarted);
+        executionStarted = System.nanoTime();
         Output o2 = this.tableFiltering(o1, pageSize - ids.size(), currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
+        this.endMeasuringTime("Filter by date", executionStarted);
         this.addSourceNodes(o2, ids);
         return Stream.of(o2);
     }
@@ -64,11 +71,12 @@ public class AdvancedQuery {
     public Stream<LongOup> graphOfInterestCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                                 @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
                                                 @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase, @Name("pageSize") long pageSize,
-                                                @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime) {
+                                                @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
+                                                @Name("inclusionType") long inclusionType) {
 
         BFSOutput o = GoI(ids, ignoredTypes, lengthLimit, isDirected, true);
         o.nodes.removeIf(ids::contains);
-        o = this.filterByDate(o, startTime, endTime, timeMapping);
+        o = this.filterByDate(o, startTime, endTime, timeMapping, inclusionType);
         Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
         this.addSourceNodes(r, ids);
         int n = r.nodes.size();
@@ -98,12 +106,19 @@ public class AdvancedQuery {
                                                    @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
                                                    @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
                                                    @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
-                                                   @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime) {
+                                                   @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
+                                                   @Name("inclusionType") long inclusionType) {
+        long executionStarted = System.nanoTime();
         CSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, false);
+        this.endMeasuringTime("Common stream", executionStarted);
         o1.nodes.removeIf(ids::contains);
         BFSOutput bfsOutput = new BFSOutput(o1.nodes, o1.edges);
-        bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping);
+        executionStarted = System.nanoTime();
+        bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping, inclusionType);
+        this.endMeasuringTime("Filter by date", executionStarted);
+        executionStarted = System.nanoTime();
         Output o2 = this.tableFiltering(bfsOutput, pageSize - ids.size(), currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
+        this.endMeasuringTime("Table filtering", executionStarted);
         this.addSourceNodes(o2, ids);
         return Stream.of(new CommonStreamOutput(o2, new ArrayList<>(o1.targetRegulatorNodes)));
     }
@@ -124,11 +139,12 @@ public class AdvancedQuery {
     public Stream<LongOup> commonStreamCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                              @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
                                              @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase, @Name("pageSize") long pageSize,
-                                             @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime) {
+                                             @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
+                                             @Name("inclusionType") long inclusionType) {
         CSOutput o = this.CS(ids, ignoredTypes, lengthLimit, direction, true);
         o.nodes.removeIf(ids::contains);
         BFSOutput bfsOutput = new BFSOutput(o.nodes, o.edges);
-        bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping);
+        bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping, inclusionType);
         Output r = this.filterByTxt(bfsOutput, filterTxt, isIgnoreCase);
         this.addSourceNodes(r, ids);
         int n = r.nodes.size();
@@ -273,13 +289,13 @@ public class AdvancedQuery {
     /**
      * filter by a datetime range
      *
-     * @param o
-     * @param d1
-     * @param d2
-     * @param timeMapping
-     * @return
+     * @param o           BFS output
+     * @param d1          Unix time formatted time for start date
+     * @param d2          Unix time formatted time for end date
+     * @param timeMapping mapping to remark start and end date properties for an entity (Node or Relationship)
+     * @return filtered BFS output
      */
-    private BFSOutput filterByDate(BFSOutput o, long d1, long d2, Map<String, List<String>> timeMapping) {
+    private BFSOutput filterByDate(BFSOutput o, long d1, long d2, Map<String, List<String>> timeMapping, long inclusionType) {
         if (d1 == d2) {
             return o;
         }
@@ -291,7 +307,7 @@ public class AdvancedQuery {
             if (l == null) {
                 r.nodes.add(id);
             } else {
-                this.addIfInRange(id, d1, d2, n, l, r.nodes);
+                this.addIfInRange(id, d1, d2, inclusionType, n, l, r.nodes);
             }
         }
 
@@ -302,35 +318,32 @@ public class AdvancedQuery {
             if (l == null) {
                 r.edges.add(id);
             } else {
-                this.addIfInRange(id, d1, d2, e, l, r.edges);
+                this.addIfInRange(id, d1, d2, inclusionType, e, l, r.edges);
             }
         }
         return r;
     }
 
-    private void addIfInRange(long id, long d1, long d2, Entity e, List<String> propNames, HashSet<Long> set) {
+    private void addIfInRange(long id, long d1, long d2, long inclusionType, Entity e, List<String> propNames, HashSet<Long> set) {
         String propStartName = propNames.get(0);
         String propEndName = propNames.get(1);
         boolean has1 = e.hasProperty(propStartName);
         boolean has2 = e.hasProperty(propEndName);
-        if (!has1 && !has2) {
+        long start = Long.MIN_VALUE;
+        long end = Long.MAX_VALUE;
+        if (has1) {
+            start = (long) e.getProperty(propStartName);
+        }
+        if (has2) {
+            end = (long) e.getProperty(propEndName);
+        }
+
+        if (inclusionType == 0 && start <= d2 && end >= d1) { // the range and object life-time are overlapping
             set.add(id);
-        } else if (!has1) {
-            long end = (long) e.getProperty(propEndName);
-            if (end < d2) {
-                set.add(id);
-            }
-        } else if (!has2) {
-            long start = (long) e.getProperty(propStartName);
-            if (start > d1) {
-                set.add(id);
-            }
-        } else {
-            long end = (long) e.getProperty(propEndName);
-            long start = (long) e.getProperty(propStartName);
-            if (start > d1 && end < d2) {
-                set.add(id);
-            }
+        } else if (inclusionType == 1 && d1 <= start && d2 >= end) { // the range contains the object life-time
+            set.add(id);
+        } else if (inclusionType == 2 && start <= d1 && end >= d2) { // the range contained by the object life-time
+            set.add(id);
         }
     }
 
@@ -755,6 +768,12 @@ public class AdvancedQuery {
             }
         }
         return orphanNodes;
+    }
+
+    private void endMeasuringTime(String msg, long start) {
+        long end = System.nanoTime();
+        String s = "" + Math.round((end - start) / 1000000000.0 * 100) / 100.0;
+        log.debug("executed in " + s + " seconds for " + msg);
     }
 
     public static class Output {
