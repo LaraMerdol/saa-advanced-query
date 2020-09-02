@@ -773,7 +773,7 @@ public class AdvancedQuery {
     private void endMeasuringTime(String msg, long start) {
         long end = System.nanoTime();
         String s = "" + Math.round((end - start) / 1000000000.0 * 100) / 100.0;
-        log.debug("executed in " + s + " seconds for " + msg);
+        log.info("executed in " + s + " seconds for " + msg);
     }
 
     public static class Output {
