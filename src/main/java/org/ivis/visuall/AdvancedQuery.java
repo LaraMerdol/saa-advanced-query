@@ -503,6 +503,9 @@ public class AdvancedQuery {
         Queue<Long> queue = new LinkedList<>();
         queue.add(nodeId);
 
+        RelationshipType[] allowedEdgeTypesArr = getValidRelationshipTypes(ignoredTypes);
+        HashSet<String> ignoredTypesSet = new HashSet<>(ignoredTypes);
+
         int currDepth = 0;
         int queueSizeBeforeMe = 0;
         boolean isPendingDepthIncrease = false;
@@ -519,11 +522,11 @@ public class AdvancedQuery {
             Node curr = this.db.getNodeById(queue.remove());
             queueSizeBeforeMe--;
 
-            Iterable<Relationship> edges = curr.getRelationships(dir, this.getValidRelationshipTypes(ignoredTypes));
+            Iterable<Relationship> edges = curr.getRelationships(dir, allowedEdgeTypesArr);
             for (Relationship e : edges) {
                 Node n = e.getOtherNode(curr);
                 long id = n.getId();
-                if (this.isNodeIgnored(n, ignoredTypes) || visitedNodes.contains(id)) {
+                if (this.isNodeIgnored(n, ignoredTypesSet) || visitedNodes.contains(id)) {
                     continue;
                 }
 
@@ -587,9 +590,9 @@ public class AdvancedQuery {
         // prepare the edge types and direction
         ArrayList<RelationshipType> allowedEdgeTypes = new ArrayList<>();
         ResourceIterable<RelationshipType> allEdgeTypes = this.db.getAllRelationshipTypes();
-        ignoredTypes.replaceAll(String::toLowerCase);
+
         for (RelationshipType r : allEdgeTypes) {
-            String name = r.name().toLowerCase();
+            String name = r.name();
             if (!ignoredTypes.contains(name)) {
                 allowedEdgeTypes.add(r);
             }
@@ -620,6 +623,7 @@ public class AdvancedQuery {
         Queue<Long> queue = new LinkedList<>(ids);
 
         RelationshipType[] allowedEdgeTypesArr = getValidRelationshipTypes(ignoredTypes);
+        HashSet<String> ignoredTypesSet = new HashSet<>(ignoredTypes);
         Direction d = dir;
         if (!isDirected) {
             d = Direction.BOTH;
@@ -633,7 +637,7 @@ public class AdvancedQuery {
                 long edgeId = e.getId();
                 Node n2 = e.getOtherNode(this.db.getNodeById(n1));
                 long n2Id = n2.getId();
-                if (this.isNodeIgnored(n2, ignoredTypes) || visitedEdges.contains(edgeId)) {
+                if (this.isNodeIgnored(n2, ignoredTypesSet) || visitedEdges.contains(edgeId)) {
                     continue;
                 }
                 visitedEdges.add(edgeId);
@@ -677,10 +681,9 @@ public class AdvancedQuery {
      * @param ignoredTypes list of strings which are ignored types
      * @return boolean
      */
-    private boolean isNodeIgnored(Node n, List<String> ignoredTypes) {
-        ignoredTypes.replaceAll(String::toLowerCase);
+    private boolean isNodeIgnored(Node n, HashSet<String> ignoredTypes) {
         for (Label l : n.getLabels()) {
-            if (ignoredTypes.contains(l.name().toLowerCase())) {
+            if (ignoredTypes.contains(l.name())) {
                 return true;
             }
         }
