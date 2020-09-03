@@ -663,14 +663,14 @@ public class AdvancedQuery {
                 if (labelN2 == null) {
                     labelN2 = new LabelData(lengthLimit + 1);
                 }
-                nodeLabels.put(n2Id, labelN2);
+
                 if (labelN2.getLabel(dir) > labelN1.getLabel(dir) + 1) {
                     labelN2.setLabel(labelN1.getLabel(dir) + 1, dir);
-                    nodeLabels.put(n2Id, labelN2);
                     if (labelN2.getLabel(dir) < lengthLimit && !ids.contains(n2Id)) {
                         queue.add(n2Id);
                     }
                 }
+                nodeLabels.put(n2Id, labelN2);
             }
         }
         return new BFSOutput(nodeSet, edgeSet);
