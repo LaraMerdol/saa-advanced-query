@@ -620,14 +620,14 @@ public class AdvancedQuery {
         Queue<Long> queue = new LinkedList<>(ids);
 
         RelationshipType[] allowedEdgeTypesArr = getValidRelationshipTypes(ignoredTypes);
+        Direction d = dir;
+        if (!isDirected) {
+            d = Direction.BOTH;
+        }
 
         while (!queue.isEmpty()) {
             long n1 = queue.remove();
 
-            Direction d = dir;
-            if (!isDirected) {
-                d = Direction.BOTH;
-            }
             Iterable<Relationship> edges = this.db.getNodeById(n1).getRelationships(d, allowedEdgeTypesArr);
             for (Relationship e : edges) {
                 long edgeId = e.getId();
