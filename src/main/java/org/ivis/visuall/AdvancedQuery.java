@@ -332,10 +332,20 @@ public class AdvancedQuery {
         long start = Long.MIN_VALUE;
         long end = Long.MAX_VALUE;
         if (has1) {
-            start = (long) e.getProperty(propStartName);
+            Object o = e.getProperty(propStartName);
+            if (o instanceof Long) {
+                start = (long) o;
+            } else if (o instanceof  Double) {
+                start = ((Double) o).longValue();
+            }
         }
         if (has2) {
-            end = (long) e.getProperty(propEndName);
+            Object o = e.getProperty(propEndName);
+            if (o instanceof Long) {
+                end = (long) o;
+            } else if (o instanceof  Double) {
+                end = ((Double) o).longValue();
+            }
         }
 
         if (inclusionType == 0 && start <= d2 && end >= d1) { // the range and object life-time are overlapping
