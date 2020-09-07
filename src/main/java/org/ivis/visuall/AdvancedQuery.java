@@ -335,7 +335,7 @@ public class AdvancedQuery {
             Object o = e.getProperty(propStartName);
             if (o instanceof Long) {
                 start = (long) o;
-            } else if (o instanceof  Double) {
+            } else if (o instanceof Double) {
                 start = ((Double) o).longValue();
             }
         }
@@ -343,7 +343,7 @@ public class AdvancedQuery {
             Object o = e.getProperty(propEndName);
             if (o instanceof Long) {
                 end = (long) o;
-            } else if (o instanceof  Double) {
+            } else if (o instanceof Double) {
                 end = ((Double) o).longValue();
             }
         }
@@ -385,8 +385,8 @@ public class AdvancedQuery {
             nodeLabels.put(id, new LabelData(0, 0));
         }
 
-        BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.OUTGOING, isDirected);
-        BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.INCOMING, isDirected);
+        BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.OUTGOING, isDirected, false);
+        BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.INCOMING, isDirected, false);
         o1.edges.addAll(o2.edges);
         o1.nodes.addAll(o2.nodes);
 
@@ -454,8 +454,13 @@ public class AdvancedQuery {
 
         BFSOutput o1, o2;
         if (d == Direction.OUTGOING) { // means common target
-            o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true);
-            o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true);
+            if (s1.size() < resultNodes.size()) {
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true, false);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true, true);
+            } else {
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true, false);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true, true);
+            }
         } else if (d == Direction.INCOMING) { // means common regulator
             for (Long id : s1) {
                 nodeLabels.put(id, new LabelData(lengthLimit + 1, 0));
@@ -463,11 +468,21 @@ public class AdvancedQuery {
             for (Long id : resultNodes) {
                 nodeLabels.put(id, new LabelData(0, lengthLimit + 1));
             }
-            o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true);
-            o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true);
+            if (s1.size() < resultNodes.size()) {
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true, false);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true, true);
+            } else {
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true, false);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true, true);
+            }
         } else {
-            o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, false);
-            o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, false);
+            if (s1.size() < resultNodes.size()) {
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, false, false);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, false, true);
+            } else {
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, false, false);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, false, true);
+            }
         }
 
         // merge result sets
@@ -624,7 +639,8 @@ public class AdvancedQuery {
      * @return graph elements visited
      */
     private BFSOutput GoI_BFS(HashMap<Long, LabelData> nodeLabels, HashMap<Long, LabelData> edgeLabels,
-                              HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir, boolean isDirected) {
+                              HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir, boolean isDirected,
+                              boolean isFollowLabeled) {
         HashSet<Long> nodeSet = new HashSet<>();
         HashSet<Long> edgeSet = new HashSet<>();
         HashSet<Long> visitedEdges = new HashSet<>();
@@ -647,11 +663,13 @@ public class AdvancedQuery {
                 long edgeId = e.getId();
                 Node n2 = e.getOtherNode(this.db.getNodeById(n1));
                 long n2Id = n2.getId();
-                if (this.isNodeIgnored(n2, ignoredTypesSet) || visitedEdges.contains(edgeId)) {
+                LabelData labelE = edgeLabels.get(edgeId);
+                if (this.isNodeIgnored(n2, ignoredTypesSet) || visitedEdges.contains(edgeId) ||
+                        (isFollowLabeled && labelE == null)) {
                     continue;
                 }
                 visitedEdges.add(edgeId);
-                LabelData labelE = edgeLabels.get(edgeId);
+
                 if (labelE == null) {
                     labelE = new LabelData(lengthLimit + 1);
                 }
