@@ -49,9 +49,16 @@ public class AdvancedQuery {
         o1 = this.filterByDate(o1, startTime, endTime, timeMapping, inclusionType);
         this.endMeasuringTime("Filter by date", executionStarted);
         executionStarted = System.nanoTime();
-        Output o2 = this.tableFiltering(o1, pageSize - ids.size(), currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
+        int cntSrcNode = ids.size();
+        long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
+        Output o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
         this.endMeasuringTime("Filter by date", executionStarted);
-        this.addSourceNodes(o2, ids);
+        if (numSrcNode2return > 0) {
+            int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
+            int toIdx = Math.min(cntSrcNode, (int) (currPage * pageSize));
+            this.addSourceNodes(o2, ids.subList(fromIdx, toIdx));
+        }
+
         return Stream.of(o2);
     }
 
@@ -79,10 +86,7 @@ public class AdvancedQuery {
         o = this.filterByDate(o, startTime, endTime, timeMapping, inclusionType);
         Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
         this.addSourceNodes(r, ids);
-        int n = r.nodes.size();
-        int numPage = (int) Math.ceil((double) n / pageSize); // if we don't consider returning source nodes always
-        int numExtra4SrcNodes = (numPage - 1) * ids.size();
-        return Stream.of(new LongOup(n + numExtra4SrcNodes));
+        return Stream.of(new LongOup(r.nodes.size()));
     }
 
     /**
@@ -117,9 +121,15 @@ public class AdvancedQuery {
         bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping, inclusionType);
         this.endMeasuringTime("Filter by date", executionStarted);
         executionStarted = System.nanoTime();
-        Output o2 = this.tableFiltering(bfsOutput, pageSize - ids.size(), currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
+        int cntSrcNode = ids.size();
+        long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
+        Output o2 = this.tableFiltering(bfsOutput, pageSize - numSrcNode2return, currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
         this.endMeasuringTime("Table filtering", executionStarted);
-        this.addSourceNodes(o2, ids);
+        if (numSrcNode2return > 0) {
+            int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
+            int toIdx = Math.min(cntSrcNode, (int) (currPage * pageSize));
+            this.addSourceNodes(o2, ids.subList(fromIdx, toIdx));
+        }
         return Stream.of(new CommonStreamOutput(o2, new ArrayList<>(o1.targetRegulatorNodes)));
     }
 
@@ -147,10 +157,7 @@ public class AdvancedQuery {
         bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping, inclusionType);
         Output r = this.filterByTxt(bfsOutput, filterTxt, isIgnoreCase);
         this.addSourceNodes(r, ids);
-        int n = r.nodes.size();
-        int numPage = (int) Math.ceil((double) n / pageSize); // if we don't consider returning source nodes always
-        int numExtra4SrcNodes = (numPage - 1) * ids.size();
-        return Stream.of(new LongOup(n + numExtra4SrcNodes));
+        return Stream.of(new LongOup(r.nodes.size()));
     }
 
     /**
@@ -158,7 +165,7 @@ public class AdvancedQuery {
      *
      * @param o            to be paginated
      * @param pageSize     size of a page
-     * @param currPage     current page to be returned
+     * @param currPage     current page to be returned (1 indexed)
      * @param filterTxt    filtering text
      * @param isIgnoreCase should ignore case in text filtering?
      * @param orderBy      order by a property
