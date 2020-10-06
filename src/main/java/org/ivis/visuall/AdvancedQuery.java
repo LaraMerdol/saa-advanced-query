@@ -50,8 +50,9 @@ public class AdvancedQuery {
         this.endMeasuringTime("Filter by date", executionStarted);
         executionStarted = System.nanoTime();
         int cntSrcNode = ids.size();
+        int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
-        Output o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
+        Output o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
         this.endMeasuringTime("Filter by date", executionStarted);
         if (numSrcNode2return > 0) {
             int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
@@ -77,9 +78,9 @@ public class AdvancedQuery {
     @Description("returns only the count of nodes of the minimal sub-graph")
     public Stream<LongOup> graphOfInterestCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                                 @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
-                                                @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase, @Name("pageSize") long pageSize,
-                                                @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
-                                                @Name("inclusionType") long inclusionType) {
+                                                @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
+                                                @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
+                                                @Name("endTime") long endTime, @Name("inclusionType") long inclusionType) {
 
         BFSOutput o = GoI(ids, ignoredTypes, lengthLimit, isDirected, true);
         o.nodes.removeIf(ids::contains);
@@ -122,8 +123,9 @@ public class AdvancedQuery {
         this.endMeasuringTime("Filter by date", executionStarted);
         executionStarted = System.nanoTime();
         int cntSrcNode = ids.size();
+        int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
-        Output o2 = this.tableFiltering(bfsOutput, pageSize - numSrcNode2return, currPage, filterTxt, isIgnoreCase, orderBy, orderDir);
+        Output o2 = this.tableFiltering(bfsOutput, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
         this.endMeasuringTime("Table filtering", executionStarted);
         if (numSrcNode2return > 0) {
             int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
@@ -148,9 +150,9 @@ public class AdvancedQuery {
     @Description("finds only the nodes of the common up/down/undirected target/regulator")
     public Stream<LongOup> commonStreamCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
                                              @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
-                                             @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase, @Name("pageSize") long pageSize,
-                                             @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
-                                             @Name("inclusionType") long inclusionType) {
+                                             @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
+                                             @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
+                                             @Name("endTime") long endTime, @Name("inclusionType") long inclusionType) {
         CSOutput o = this.CS(ids, ignoredTypes, lengthLimit, direction, true);
         o.nodes.removeIf(ids::contains);
         BFSOutput bfsOutput = new BFSOutput(o.nodes, o.edges);
@@ -165,14 +167,14 @@ public class AdvancedQuery {
      *
      * @param o            to be paginated
      * @param pageSize     size of a page
-     * @param currPage     current page to be returned (1 indexed)
+     * @param skip         number of elements to skip
      * @param filterTxt    filtering text
      * @param isIgnoreCase should ignore case in text filtering?
      * @param orderBy      order by a property
      * @param orderDir     order direction
      * @return a page of o
      */
-    private Output tableFiltering(BFSOutput o, long pageSize, long currPage, String filterTxt, boolean isIgnoreCase, String orderBy, long orderDir) {
+    private Output tableFiltering(BFSOutput o, long pageSize, int skip, String filterTxt, boolean isIgnoreCase, String orderBy, long orderDir) {
         Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
 
         // sort and paginate
@@ -200,18 +202,10 @@ public class AdvancedQuery {
                 Collections.reverse(r.nodes);
             }
         }
-        int fromIdx = (int) ((currPage - 1) * pageSize);
         int nodeCount = r.nodes.size();
-        if (fromIdx >= nodeCount) {
-            fromIdx = nodeCount;
-        }
-        if (fromIdx < 0) {
-            fromIdx = 0;
-        }
-        int toIdx = (int) (currPage * pageSize);
-        if (toIdx < 0 || toIdx > nodeCount) {
-            toIdx = nodeCount;
-        }
+        int fromIdx = Math.min(Math.max(0, skip), nodeCount);
+        int toIdx = Math.min(fromIdx + (int) pageSize, nodeCount);
+
         r.nodes = r.nodes.subList(fromIdx, toIdx);
 
         // get all edges
@@ -497,11 +491,9 @@ public class AdvancedQuery {
         o1.nodes.addAll(o2.nodes);
 
         BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
-        if (!isOnlyNode) {
-            for (long edgeId : o1.edges) {
-                if (edgeLabels.get(edgeId).fwd + edgeLabels.get(edgeId).rev <= lengthLimit) {
-                    r.edges.add(edgeId);
-                }
+        for (long edgeId : o1.edges) {
+            if (edgeLabels.get(edgeId).fwd + edgeLabels.get(edgeId).rev <= lengthLimit) {
+                r.edges.add(edgeId);
             }
         }
 
@@ -516,6 +508,10 @@ public class AdvancedQuery {
         s1.addAll(resultNodes);
         this.purify(s1, r);
         r = this.removeOrphanEdges(r);
+
+        if (isOnlyNode) {
+            r.edges.clear();
+        }
         return new CSOutput(r.nodes, r.edges, resultNodes);
     }
 
