@@ -40,27 +40,32 @@ public class AdvancedQuery {
                                           @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
                                           @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
                                           @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
-                                          @Name("inclusionType") long inclusionType) {
-        long executionStarted = System.nanoTime();
-        BFSOutput o1 = GoI(ids, ignoredTypes, lengthLimit, isDirected, false);
-        this.endMeasuringTime("Graph of interest", executionStarted);
-        o1.nodes.removeIf(ids::contains);
-        executionStarted = System.nanoTime();
-        o1 = this.filterByDate(o1, startTime, endTime, timeMapping, inclusionType);
-        this.endMeasuringTime("Filter by date", executionStarted);
-        executionStarted = System.nanoTime();
-        int cntSrcNode = ids.size();
-        int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
-        long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
-        Output o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
-        this.endMeasuringTime("Filter by date", executionStarted);
-        if (numSrcNode2return > 0) {
-            int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
-            int toIdx = Math.min(cntSrcNode, (int) (currPage * pageSize));
-            this.addSourceNodes(o2, ids.subList(fromIdx, toIdx));
+                                          @Name("inclusionType") long inclusionType, @Name("timeout") long timeout) {
+        try {
+            long executionStarted = System.nanoTime();
+            TimeChecker timeChecker = new TimeChecker(timeout);
+            BFSOutput o1 = GoI(ids, ignoredTypes, lengthLimit, isDirected, false, timeChecker);
+            this.endMeasuringTime("Graph of interest", executionStarted);
+            o1.nodes.removeIf(ids::contains);
+            executionStarted = System.nanoTime();
+            o1 = this.filterByDate(o1, startTime, endTime, timeMapping, inclusionType);
+            this.endMeasuringTime("Filter by date", executionStarted);
+            executionStarted = System.nanoTime();
+            int cntSrcNode = ids.size();
+            int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
+            long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
+            Output o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
+            this.endMeasuringTime("Filter by date", executionStarted);
+            if (numSrcNode2return > 0) {
+                int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
+                int toIdx = Math.min(cntSrcNode, (int) (currPage * pageSize));
+                this.addSourceNodes(o2, ids.subList(fromIdx, toIdx));
+            }
+            return Stream.of(o2);
+        } catch (Exception e) {
+            log.info(e.getMessage());
+            return Stream.of(new Output());
         }
-
-        return Stream.of(o2);
     }
 
     /**
@@ -80,14 +85,19 @@ public class AdvancedQuery {
                                                 @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
                                                 @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
                                                 @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
-                                                @Name("endTime") long endTime, @Name("inclusionType") long inclusionType) {
-
-        BFSOutput o = GoI(ids, ignoredTypes, lengthLimit, isDirected, true);
-        o.nodes.removeIf(ids::contains);
-        o = this.filterByDate(o, startTime, endTime, timeMapping, inclusionType);
-        Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
-        this.addSourceNodes(r, ids);
-        return Stream.of(new LongOup(r.nodes.size()));
+                                                @Name("endTime") long endTime, @Name("inclusionType") long inclusionType, @Name("timeout") long timeout) {
+        try {
+            TimeChecker timeChecker = new TimeChecker(timeout);
+            BFSOutput o = GoI(ids, ignoredTypes, lengthLimit, isDirected, true, timeChecker);
+            o.nodes.removeIf(ids::contains);
+            o = this.filterByDate(o, startTime, endTime, timeMapping, inclusionType);
+            Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
+            this.addSourceNodes(r, ids);
+            return Stream.of(new LongOup(r.nodes.size()));
+        } catch (Exception e) {
+            log.info(e.getMessage());
+            return Stream.of(new LongOup(0));
+        }
     }
 
     /**
@@ -112,27 +122,33 @@ public class AdvancedQuery {
                                                    @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
                                                    @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
                                                    @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
-                                                   @Name("inclusionType") long inclusionType) {
-        long executionStarted = System.nanoTime();
-        CSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, false);
-        this.endMeasuringTime("Common stream", executionStarted);
-        o1.nodes.removeIf(ids::contains);
-        BFSOutput bfsOutput = new BFSOutput(o1.nodes, o1.edges);
-        executionStarted = System.nanoTime();
-        bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping, inclusionType);
-        this.endMeasuringTime("Filter by date", executionStarted);
-        executionStarted = System.nanoTime();
-        int cntSrcNode = ids.size();
-        int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
-        long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
-        Output o2 = this.tableFiltering(bfsOutput, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
-        this.endMeasuringTime("Table filtering", executionStarted);
-        if (numSrcNode2return > 0) {
-            int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
-            int toIdx = Math.min(cntSrcNode, (int) (currPage * pageSize));
-            this.addSourceNodes(o2, ids.subList(fromIdx, toIdx));
+                                                   @Name("inclusionType") long inclusionType, @Name("timeout") long timeout) {
+        try {
+            long executionStarted = System.nanoTime();
+            TimeChecker timeChecker = new TimeChecker(timeout);
+            CSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, false, timeChecker);
+            this.endMeasuringTime("Common stream", executionStarted);
+            o1.nodes.removeIf(ids::contains);
+            BFSOutput bfsOutput = new BFSOutput(o1.nodes, o1.edges);
+            executionStarted = System.nanoTime();
+            bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping, inclusionType);
+            this.endMeasuringTime("Filter by date", executionStarted);
+            executionStarted = System.nanoTime();
+            int cntSrcNode = ids.size();
+            int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
+            long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
+            Output o2 = this.tableFiltering(bfsOutput, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
+            this.endMeasuringTime("Table filtering", executionStarted);
+            if (numSrcNode2return > 0) {
+                int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
+                int toIdx = Math.min(cntSrcNode, (int) (currPage * pageSize));
+                this.addSourceNodes(o2, ids.subList(fromIdx, toIdx));
+            }
+            return Stream.of(new CommonStreamOutput(o2, new ArrayList<>(o1.targetRegulatorNodes)));
+        } catch (Exception e) {
+            log.info(e.getMessage());
+            return Stream.of(new CommonStreamOutput(new Output(), new ArrayList<>()));
         }
-        return Stream.of(new CommonStreamOutput(o2, new ArrayList<>(o1.targetRegulatorNodes)));
     }
 
     /**
@@ -152,14 +168,20 @@ public class AdvancedQuery {
                                              @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
                                              @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
                                              @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
-                                             @Name("endTime") long endTime, @Name("inclusionType") long inclusionType) {
-        CSOutput o = this.CS(ids, ignoredTypes, lengthLimit, direction, true);
-        o.nodes.removeIf(ids::contains);
-        BFSOutput bfsOutput = new BFSOutput(o.nodes, o.edges);
-        bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping, inclusionType);
-        Output r = this.filterByTxt(bfsOutput, filterTxt, isIgnoreCase);
-        this.addSourceNodes(r, ids);
-        return Stream.of(new LongOup(r.nodes.size()));
+                                             @Name("endTime") long endTime, @Name("inclusionType") long inclusionType, @Name("timeout") long timeout) {
+        try {
+            TimeChecker timeChecker = new TimeChecker(timeout);
+            CSOutput o = this.CS(ids, ignoredTypes, lengthLimit, direction, true, timeChecker);
+            o.nodes.removeIf(ids::contains);
+            BFSOutput bfsOutput = new BFSOutput(o.nodes, o.edges);
+            bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping, inclusionType);
+            Output r = this.filterByTxt(bfsOutput, filterTxt, isIgnoreCase);
+            this.addSourceNodes(r, ids);
+            return Stream.of(new LongOup(r.nodes.size()));
+        } catch (Exception e) {
+            log.info(e.getMessage());
+            return Stream.of(new LongOup(0));
+        }
     }
 
     /**
@@ -378,7 +400,7 @@ public class AdvancedQuery {
      * @param isOnlyNode   should return only the nodes?
      * @return a set of nodes and edges which is sub-graph
      */
-    private BFSOutput GoI(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected, boolean isOnlyNode) {
+    private BFSOutput GoI(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected, boolean isOnlyNode, TimeChecker timeChecker) throws Exception {
         HashSet<Long> idSet = new HashSet<>(ids);
         HashMap<Long, LabelData> edgeLabels = new HashMap<>();
         HashMap<Long, LabelData> nodeLabels = new HashMap<>();
@@ -386,8 +408,8 @@ public class AdvancedQuery {
             nodeLabels.put(id, new LabelData(0, 0));
         }
 
-        BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.OUTGOING, isDirected, false);
-        BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.INCOMING, isDirected, false);
+        BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.OUTGOING, isDirected, false, timeChecker);
+        BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.INCOMING, isDirected, false, timeChecker);
         o1.edges.addAll(o2.edges);
         o1.nodes.addAll(o2.nodes);
 
@@ -424,7 +446,7 @@ public class AdvancedQuery {
      * @param isOnlyNode   if true, returns only nodes
      * @return Outputs a list of nodes and edges (Cypher does not accept HashSet)
      */
-    private CSOutput CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction, boolean isOnlyNode) {
+    private CSOutput CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction, boolean isOnlyNode, TimeChecker timeChecker) throws Exception {
 
         HashSet<Long> resultNodes = new HashSet<>();
 
@@ -456,11 +478,11 @@ public class AdvancedQuery {
         BFSOutput o1, o2;
         if (d == Direction.OUTGOING) { // means common target
             if (s1.size() < resultNodes.size()) {
-                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true, false);
-                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true, true);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true, false, timeChecker);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true, true, timeChecker);
             } else {
-                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true, false);
-                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true, true);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true, false, timeChecker);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true, true, timeChecker);
             }
         } else if (d == Direction.INCOMING) { // means common regulator
             for (Long id : s1) {
@@ -470,19 +492,19 @@ public class AdvancedQuery {
                 nodeLabels.put(id, new LabelData(0, lengthLimit + 1));
             }
             if (s1.size() < resultNodes.size()) {
-                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true, false);
-                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true, true);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true, false, timeChecker);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true, true, timeChecker);
             } else {
-                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true, false);
-                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true, true);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true, false, timeChecker);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true, true, timeChecker);
             }
         } else {
             if (s1.size() < resultNodes.size()) {
-                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, false, false);
-                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, false, true);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, false, false, timeChecker);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, false, true, timeChecker);
             } else {
-                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, false, false);
-                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, false, true);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, false, false, timeChecker);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, false, true, timeChecker);
             }
         }
 
@@ -643,7 +665,7 @@ public class AdvancedQuery {
      */
     private BFSOutput GoI_BFS(HashMap<Long, LabelData> nodeLabels, HashMap<Long, LabelData> edgeLabels,
                               HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir, boolean isDirected,
-                              boolean isFollowLabeled) {
+                              boolean isFollowLabeled, TimeChecker timeChecker) throws Exception {
         HashSet<Long> nodeSet = new HashSet<>();
         HashSet<Long> edgeSet = new HashSet<>();
         HashSet<Long> visitedEdges = new HashSet<>();
@@ -662,6 +684,7 @@ public class AdvancedQuery {
             long n1 = queue.remove();
 
             Iterable<Relationship> edges = this.db.getNodeById(n1).getRelationships(d, allowedEdgeTypesArr);
+            timeChecker.checkTime();
             for (Relationship e : edges) {
                 long edgeId = e.getId();
                 Node n2 = e.getOtherNode(this.db.getNodeById(n1));
@@ -702,6 +725,7 @@ public class AdvancedQuery {
                     }
                 }
                 nodeLabels.put(n2Id, labelN2);
+                timeChecker.checkTime();
             }
         }
         return new BFSOutput(nodeSet, edgeSet);
@@ -914,6 +938,27 @@ public class AdvancedQuery {
                 return this.fwd;
             }
             return -1;
+        }
+    }
+
+    public static class TimeChecker {
+        private long _startTime;    // in nano seconds
+        private long _timeout;  // in milli seconds
+
+        /**
+         * @param timeout maximum allowed duration in milliseconds
+         */
+        public TimeChecker(long timeout) {
+            this._startTime = System.nanoTime();
+            this._timeout = timeout;
+        }
+
+        public void checkTime() throws Exception {
+            long curr = System.nanoTime();
+            long diff = (curr - this._startTime) / 1000000;
+            if (diff > this._timeout) {
+                throw new Exception("Timeout occurred! It takes longer than " + this._timeout + " milliseconds");
+            }
         }
     }
 

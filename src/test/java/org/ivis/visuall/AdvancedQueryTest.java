@@ -68,7 +68,7 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 1, false, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+                    .run("CALL graphOfInterest([5,7], [], 1, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -95,7 +95,7 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 2, false, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+                    .run("CALL graphOfInterest([5,7], [], 2, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -122,6 +122,30 @@ public class AdvancedQueryTest {
         }
     }
 
+    // timeout tests SOMEHOW do NOT pass when I run all the tests but do PASS when I run them individually
+    @Test
+    public void GoIForLength2Timeout() {
+
+        try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+             Session session = driver.session()) {
+            // And given I have a node in the database
+            session.run(AdvancedQueryTest.paperFig11Graph);
+
+            // Then I can search for that node with lucene query syntax
+            StatementResult result = session
+                    .run("CALL graphOfInterest([5,7], [], 2, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 1) YIELD nodes, edges return nodes, edges");
+
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+
+            assertThat(nodeSet.size() == 0).isEqualTo(true);
+            assertThat(edgeSet.size() == 0).isEqualTo(true);
+        }
+    }
+
     @Test
     public void GoIForLength3() {
 
@@ -132,7 +156,7 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+                    .run("CALL graphOfInterest([5,7], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -178,6 +202,30 @@ public class AdvancedQueryTest {
         }
     }
 
+    // timeout tests SOMEHOW do NOT pass when I run all the tests but do PASS when I run them individually
+    @Test
+    public void GoIForLength3Timeout() {
+
+        try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+             Session session = driver.session()) {
+            // And given I have a node in the database
+            session.run(AdvancedQueryTest.paperFig11Graph);
+
+            // Then I can search for that node with lucene query syntax
+            StatementResult result = session
+                    .run("CALL graphOfInterest([5,7], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 1) YIELD nodes, edges return nodes, edges");
+
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+
+            assertThat(nodeSet.size() == 0).isEqualTo(true);
+            assertThat(edgeSet.size() == 0).isEqualTo(true);
+        }
+    }
+
     @Test
     public void GoIOnRunningInstance() {
         // This is in a try-block, to make sure we close the driver after the test
@@ -186,7 +234,7 @@ public class AdvancedQueryTest {
 
             // find 1 common downstream of 3 nodes
             StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+                    .run("CALL graphOfInterest([5,7], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             InternalNode n = (InternalNode) result.single().get("nodes").asList().get(0);
             assertThat(n.id()).isEqualTo(5);
@@ -208,7 +256,7 @@ public class AdvancedQueryTest {
 
             int id1 = session.run("match (n:Title) where n.primary_title = 'The Corbett-Fitzsimmons Fight' return ID(n)").single().get(0).asInt();
             int id2 = session.run("match (n:Person) where n.primary_name = 'William K.L. Dickson' return ID(n)").single().get(0).asInt();
-            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -238,7 +286,7 @@ public class AdvancedQueryTest {
 
             int id1 = session.run("match (n:Title) where n.primary_title = 'The Corbett-Fitzsimmons Fight' return ID(n)").single().get(0).asInt();
             int id2 = session.run("match (n:Title) where n.primary_title = \"Rip's Toast\" return ID(n)").single().get(0).asInt();
-            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 4, false, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 4, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -268,7 +316,7 @@ public class AdvancedQueryTest {
 
             int id1 = session.run("match (n:Post) where n.title = 'Percentage width child element in absolutely positioned parent on Internet Explorer 7' return ID(n)").single().get(0).asInt();
             int id2 = session.run("match (n:Post) where n.title = 'Convert Decimal to Double?' return ID(n)").single().get(0).asInt();
-            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, true, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, true, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -301,7 +349,7 @@ public class AdvancedQueryTest {
 
             // find 1 common downstream of 3 nodes
             StatementResult result = session
-                    .run("CALL commonStream([1,2,3], [], 3, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+                    .run("CALL commonStream([1,2,3], [], 3, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -343,7 +391,7 @@ public class AdvancedQueryTest {
 
             // find 1 common downstream of 3 nodes
             StatementResult result = session.run(
-                    "CALL commonStream([1047255, 1049683, 1043696], [], 3, 2, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+                    "CALL commonStream([1047255, 1049683, 1043696], [], 3, 2, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             InternalNode n = (InternalNode) result.single().get("nodes").asList().get(0);
             assertThat(n.id()).isEqualTo(40960);
@@ -367,7 +415,7 @@ public class AdvancedQueryTest {
 
             // find 1 common downstream of 2 nodes
             StatementResult result = session
-                    .run("CALL commonStream([1,3], [], 3, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+                    .run("CALL commonStream([1,3], [], 3, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -414,7 +462,7 @@ public class AdvancedQueryTest {
 
             // find 2 common downstream of 3 nodes
             StatementResult result = session
-                    .run("CALL commonStream([1,2,3], [], 3, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+                    .run("CALL commonStream([1,2,3], [], 3, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             Set<Long> s = result.single().get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
@@ -442,7 +490,7 @@ public class AdvancedQueryTest {
 
             // find 2 common downstream of 3 nodes
             StatementResult result = session
-                    .run("CALL commonStream([1,2,3], [], 3, 2, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+                    .run("CALL commonStream([1,2,3], [], 3, 2, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -493,10 +541,10 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL commonStream([1,2,3], [], 3, 1, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+                    .run("CALL commonStream([1,2,3], [], 3, 1, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
-             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
             Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
                     .collect(Collectors.toSet());
@@ -544,7 +592,7 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL commonStream([1,2,3], [], 1, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+                    .run("CALL commonStream([1,2,3], [], 1, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             assertThat(result.single().get("nodes").asList().size()).isEqualTo(3);
         }
@@ -567,7 +615,7 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL commonStream([1,2,3], [], 2, 1, 100, 1, null, false, null, 2, {}, 0, 0, 0) YIELD nodes, edges return nodes, edges");
+                    .run("CALL commonStream([1,2,3], [], 2, 1, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
             assertThat(result.single().get("nodes").asList().size()).isEqualTo(3);
         }
@@ -584,7 +632,7 @@ public class AdvancedQueryTest {
 
             // Then I can search for that node with lucene query syntax
             StatementResult result = session
-                    .run("CALL graphOfInterestCount([1], [], 2, false, 'actress', false, {}, 0, 0, 0) YIELD out return out");
+                    .run("CALL graphOfInterestCount([1], [], 2, false, 'actress', false, {}, 0, 0, 0, 10000) YIELD out return out");
 
             // assertThat(result.single().get("out").asInt()).isEqualTo(0);
         }
