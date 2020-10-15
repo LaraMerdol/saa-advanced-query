@@ -63,10 +63,10 @@ public class AdvancedQueryTest {
 
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
+
             session.run(AdvancedQueryTest.paperFig11Graph);
 
-            // Then I can search for that node with lucene query syntax
+
             StatementResult result = session
                     .run("CALL graphOfInterest([5,7], [], 1, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
@@ -90,10 +90,8 @@ public class AdvancedQueryTest {
 
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
-            session.run(AdvancedQueryTest.paperFig11Graph);
 
-            // Then I can search for that node with lucene query syntax
+            session.run(AdvancedQueryTest.paperFig11Graph);
             StatementResult result = session
                     .run("CALL graphOfInterest([5,7], [], 2, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
@@ -128,21 +126,11 @@ public class AdvancedQueryTest {
 
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
+
             session.run(AdvancedQueryTest.paperFig11Graph);
-
-            // Then I can search for that node with lucene query syntax
-            StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 2, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 1) YIELD nodes, edges return nodes, edges");
-
-            Record r = result.single();
-            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
-                    .collect(Collectors.toSet());
-            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
-                    .collect(Collectors.toSet());
-
-            assertThat(nodeSet.size() == 0).isEqualTo(true);
-            assertThat(edgeSet.size() == 0).isEqualTo(true);
+            StatementResult result = session.run("CALL graphOfInterest([5,7], [], 2, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 1) YIELD nodes, edges return nodes, edges");
+        } catch (Exception e) {
+            assertThat(e.getMessage().contains("Timeout occurred! It takes longer than")).isEqualTo(true);
         }
     }
 
@@ -151,10 +139,8 @@ public class AdvancedQueryTest {
 
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
-            session.run(AdvancedQueryTest.paperFig11Graph);
 
-            // Then I can search for that node with lucene query syntax
+            session.run(AdvancedQueryTest.paperFig11Graph);
             StatementResult result = session
                     .run("CALL graphOfInterest([5,7], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
@@ -208,21 +194,11 @@ public class AdvancedQueryTest {
 
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
+
             session.run(AdvancedQueryTest.paperFig11Graph);
-
-            // Then I can search for that node with lucene query syntax
-            StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 1) YIELD nodes, edges return nodes, edges");
-
-            Record r = result.single();
-            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
-                    .collect(Collectors.toSet());
-            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
-                    .collect(Collectors.toSet());
-
-            assertThat(nodeSet.size() == 0).isEqualTo(true);
-            assertThat(edgeSet.size() == 0).isEqualTo(true);
+            StatementResult result = session.run("CALL graphOfInterest([5,7], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 1) YIELD nodes, edges return nodes, edges");
+        } catch (Exception e) {
+            assertThat(e.getMessage().contains("Timeout occurred! It takes longer than")).isEqualTo(true);
         }
     }
 
@@ -246,7 +222,6 @@ public class AdvancedQueryTest {
     public void GoIOnImdb() {
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
 
             String s = this.readFile("src\\test\\java\\org\\ivis\\visuall\\imdb100.cypher").replaceAll("\n", "");
             String[] arr = s.split(";");
@@ -276,8 +251,6 @@ public class AdvancedQueryTest {
     public void GoIOnImdb2() {
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
-
             String s = this.readFile("src\\test\\java\\org\\ivis\\visuall\\imdb100.cypher").replaceAll("\n", "");
             String[] arr = s.split(";");
             for (String cql : arr) {
@@ -306,8 +279,6 @@ public class AdvancedQueryTest {
     public void GoIOnSOF() {
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
-
             String s = this.readFile("src\\test\\java\\org\\ivis\\visuall\\sofDB.cypher").replaceAll("\n", "");
             String[] arr = s.split(";");
             for (String cql : arr) {
@@ -337,7 +308,7 @@ public class AdvancedQueryTest {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
+
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
                             + "CREATE (n6:Person {name:'n6'}) CREATE (n7:Person {name:'n7'}) CREATE (n8:Person {name:'n8'}) CREATE (n9:Person {name:'n9'}) CREATE (n10:Person {name:'n10'})"
@@ -403,7 +374,7 @@ public class AdvancedQueryTest {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
+
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
                             + "CREATE (n6:Person {name:'n6'}) CREATE (n7:Person {name:'n7'}) CREATE (n8:Person {name:'n8'}) CREATE (n9:Person {name:'n9'}) CREATE (n10:Person {name:'n10'})"
@@ -449,7 +420,7 @@ public class AdvancedQueryTest {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
+
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
                             + "CREATE (n6:Person {name:'n6'}) CREATE (n7:Person {name:'n7'}) CREATE (n8:Person {name:'n8'}) CREATE (n9:Person {name:'n9'}) CREATE (n10:Person {name:'n10'})"
@@ -477,7 +448,7 @@ public class AdvancedQueryTest {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
+
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
                             + "CREATE (n6:Person {name:'n6'}) CREATE (n7:Person {name:'n7'}) CREATE (n8:Person {name:'n8'}) CREATE (n9:Person {name:'n9'}) CREATE (n10:Person {name:'n10'})"
@@ -529,7 +500,7 @@ public class AdvancedQueryTest {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
+
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
                             + "CREATE (n6:Person {name:'n6'}) CREATE (n7:Person {name:'n7'}) CREATE (n8:Person {name:'n8'}) CREATE (n9:Person {name:'n9'}) CREATE (n10:Person {name:'n10'})"
@@ -539,7 +510,7 @@ public class AdvancedQueryTest {
                             + "(n7)<-[:KNOWS]-(n11),(n8)<-[:KNOWS]-(n12),(n9)<-[:KNOWS]-(n13),"
                             + "(n11)<-[:KNOWS]-(n14),(n12)<-[:KNOWS]-(n14),(n13)<-[:KNOWS]-(n14);");
 
-            // Then I can search for that node with lucene query syntax
+
             StatementResult result = session
                     .run("CALL commonStream([1,2,3], [], 3, 1, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
@@ -580,7 +551,7 @@ public class AdvancedQueryTest {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
+
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
                             + "CREATE (n6:Person {name:'n6'}) CREATE (n7:Person {name:'n7'}) CREATE (n8:Person {name:'n8'}) CREATE (n9:Person {name:'n9'}) CREATE (n10:Person {name:'n10'})"
@@ -590,7 +561,7 @@ public class AdvancedQueryTest {
                             + "(n7)-[:KNOWS]->(n11),(n8)-[:KNOWS]->(n12),(n9)-[:KNOWS]->(n13),"
                             + "(n11)-[:KNOWS]->(n14),(n12)-[:KNOWS]->(n14),(n13)-[:KNOWS]->(n14);");
 
-            // Then I can search for that node with lucene query syntax
+
             StatementResult result = session
                     .run("CALL commonStream([1,2,3], [], 1, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
@@ -603,7 +574,7 @@ public class AdvancedQueryTest {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
+
             session.run(
                     "CREATE (n1:Person {name:'n1'}) CREATE (n2:Person {name:'n2'}) CREATE (n3:Person {name:'n3'}) CREATE (n4:Person {name:'n4'}) CREATE (n5:Person {name:'n5'})"
                             + "CREATE (n6:Person {name:'n6'}) CREATE (n7:Person {name:'n7'}) CREATE (n8:Person {name:'n8'}) CREATE (n9:Person {name:'n9'}) CREATE (n10:Person {name:'n10'})"
@@ -613,7 +584,6 @@ public class AdvancedQueryTest {
                             + "(n7)<-[:KNOWS]-(n11),(n8)<-[:KNOWS]-(n12),(n9)<-[:KNOWS]-(n13),"
                             + "(n11)<-[:KNOWS]-(n14),(n12)<-[:KNOWS]-(n14),(n13)<-[:KNOWS]-(n14);");
 
-            // Then I can search for that node with lucene query syntax
             StatementResult result = session
                     .run("CALL commonStream([1,2,3], [], 2, 1, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
 
@@ -626,15 +596,10 @@ public class AdvancedQueryTest {
         // This is in a try-block, to make sure we close the driver after the test
         try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
              Session session = driver.session()) {
-            // And given I have a node in the database
-            session.run(
-                    "CREATE (n1:Person {name:'n1', primary_profession: ['actress', 'soundtrack'], age: 35}) CREATE (n2:Person {age: 29, name:'n2', primary_profession: ['actor', 'soundtrack']});");
 
-            // Then I can search for that node with lucene query syntax
+            session.run("CREATE (n1:Person {name:'n1', primary_profession: ['actress', 'soundtrack'], age: 35}) CREATE (n2:Person {age: 29, name:'n2', primary_profession: ['actor', 'soundtrack']});");
             StatementResult result = session
                     .run("CALL graphOfInterestCount([1], [], 2, false, 'actress', false, {}, 0, 0, 0, 10000) YIELD out return out");
-
-            // assertThat(result.single().get("out").asInt()).isEqualTo(0);
         }
     }
 
