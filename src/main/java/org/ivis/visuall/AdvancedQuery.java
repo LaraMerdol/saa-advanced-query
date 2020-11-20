@@ -1,8 +1,6 @@
 package org.ivis.visuall;
 
 import org.neo4j.graphdb.*;
-import org.neo4j.graphdb.Transaction;
-import org.neo4j.kernel.impl.coreapi.PlaceboTransaction;
 import org.neo4j.logging.Log;
 import org.neo4j.procedure.*;
 
@@ -56,6 +54,7 @@ public class AdvancedQuery {
         int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
         Output o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
+        o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
         this.endMeasuringTime("Filter by date", executionStarted);
         if (numSrcNode2return > 0) {
             int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
@@ -63,33 +62,6 @@ public class AdvancedQuery {
             this.addSourceNodes(o2, ids.subList(fromIdx, toIdx));
         }
         return Stream.of(o2);
-    }
-
-    /**
-     * returns only the count of nodes of the minimal sub-graph
-     *
-     * @param ids          node ids to find the minimal connected graph
-     * @param ignoredTypes node or edge types to be ignored
-     * @param lengthLimit  maximum length of a path between "ids"
-     * @param isDirected   is direction important?
-     * @param filterTxt    filter results by text
-     * @param isIgnoreCase should ignore case in text filtering?
-     * @return size of minimal sub-graph
-     */
-    @Procedure(value = "graphOfInterestCount", mode = Mode.WRITE)
-    @Description("returns only the count of nodes of the minimal sub-graph")
-    public Stream<LongOup> graphOfInterestCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                                @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
-                                                @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
-                                                @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
-                                                @Name("endTime") long endTime, @Name("inclusionType") long inclusionType, @Name("timeout") long timeout) throws Exception {
-        TimeChecker timeChecker = new TimeChecker(timeout);
-        BFSOutput o = GoI(ids, ignoredTypes, lengthLimit, isDirected, true, timeChecker);
-        o.nodes.removeIf(ids::contains);
-        o = this.filterByDate(o, startTime, endTime, timeMapping, inclusionType);
-        Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
-        this.addSourceNodes(r, ids);
-        return Stream.of(new LongOup(r.nodes.size()));
     }
 
     /**
@@ -129,6 +101,7 @@ public class AdvancedQuery {
         int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
         Output o2 = this.tableFiltering(bfsOutput, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
+        o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
         this.endMeasuringTime("Table filtering", executionStarted);
         if (numSrcNode2return > 0) {
             int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
@@ -136,34 +109,6 @@ public class AdvancedQuery {
             this.addSourceNodes(o2, ids.subList(fromIdx, toIdx));
         }
         return Stream.of(new CommonStreamOutput(o2, new ArrayList<>(o1.targetRegulatorNodes)));
-    }
-
-    /**
-     * finds size of common nodes and edges on the downstream or upstream or undirected stream
-     *
-     * @param ids          node ids
-     * @param ignoredTypes node or edge types to be ignored
-     * @param lengthLimit  maximum depth
-     * @param direction    INCOMING means upstream (regulator), OUTGOING means downstream (target)
-     * @param filterTxt    filter results by text
-     * @param isIgnoreCase should ignore case in text filtering?
-     * @return size of sub-graph which contains sources and targets/regulators with paths between
-     */
-    @Procedure(value = "commonStreamCount", mode = Mode.WRITE)
-    @Description("finds only the nodes of the common up/down/undirected target/regulator")
-    public Stream<LongOup> commonStreamCount(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                             @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
-                                             @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
-                                             @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
-                                             @Name("endTime") long endTime, @Name("inclusionType") long inclusionType, @Name("timeout") long timeout) throws Exception {
-        TimeChecker timeChecker = new TimeChecker(timeout);
-        CSOutput o = this.CS(ids, ignoredTypes, lengthLimit, direction, true, timeChecker);
-        o.nodes.removeIf(ids::contains);
-        BFSOutput bfsOutput = new BFSOutput(o.nodes, o.edges);
-        bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping, inclusionType);
-        Output r = this.filterByTxt(bfsOutput, filterTxt, isIgnoreCase);
-        this.addSourceNodes(r, ids);
-        return Stream.of(new LongOup(r.nodes.size()));
     }
 
     /**
@@ -189,7 +134,7 @@ public class AdvancedQuery {
      */
     private Output tableFiltering(BFSOutput o, long pageSize, int skip, String filterTxt, boolean isIgnoreCase, String orderBy, long orderDir) {
         Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
-
+        r.totalNodeCount = r.nodes.size();
         // sort and paginate
         OrderDirection dir = num2OrderDir(orderDir);
         if (orderBy != null && dir != OrderDirection.NONE) {
@@ -827,6 +772,7 @@ public class AdvancedQuery {
 
     public static class Output {
         public List<Node> nodes;
+        public long totalNodeCount;
         public List<String> nodeClass;
         public List<Long> nodeId;
 
@@ -849,6 +795,7 @@ public class AdvancedQuery {
     public static class CommonStreamOutput {
         public List<Long> targetRegulatorNodeIds;
         public List<Node> nodes;
+        public long totalNodeCount;
         public List<String> nodeClass;
         public List<Long> nodeId;
 
@@ -864,6 +811,7 @@ public class AdvancedQuery {
             this.edgeClass = o.edgeClass;
             this.nodeId = o.nodeId;
             this.edgeId = o.edgeId;
+            this.totalNodeCount = o.totalNodeCount;
             this.edgeSourceTargets = o.edgeSourceTargets;
             this.targetRegulatorNodeIds = targetRegulatorNodeIds;
         }

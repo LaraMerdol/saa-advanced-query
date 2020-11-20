@@ -599,7 +599,7 @@ public class AdvancedQueryTest {
 
             session.run("CREATE (n1:Person {name:'n1', primary_profession: ['actress', 'soundtrack'], age: 35}) CREATE (n2:Person {age: 29, name:'n2', primary_profession: ['actor', 'soundtrack']});");
             StatementResult result = session
-                    .run("CALL graphOfInterestCount([1], [], 2, false, 'actress', false, {}, 0, 0, 0, 10000) YIELD out return out");
+                    .run("CALL  graphOfInterest([1], [], 1, false, 100, 1, 'actress', false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
         }
     }
 
