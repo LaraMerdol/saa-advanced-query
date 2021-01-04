@@ -603,6 +603,89 @@ public class AdvancedQueryTest {
         }
     }
 
+    @Test
+    public void neighborhoodTest0() {
+
+        try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+             Session session = driver.session()) {
+
+            session.run(AdvancedQueryTest.paperFig11Graph);
+            StatementResult result = session
+                    .run("CALL neighborhood([3,5], [], 1, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
+
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
+            trueNodeSet.add(3L);
+            trueNodeSet.add(5L);
+            trueNodeSet.add(6L);
+            trueNodeSet.add(7L);
+            trueNodeSet.add(9L);
+
+            ArrayList<Long> trueEdgeSet = new ArrayList<>();
+            trueEdgeSet.add(3L);
+            trueEdgeSet.add(4L);
+            trueEdgeSet.add(6L);
+            trueEdgeSet.add(7L);
+
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
+        }
+    }
+
+    @Test
+    public void neighborhoodTest1() {
+
+        try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+             Session session = driver.session()) {
+
+            session.run(AdvancedQueryTest.paperFig11Graph);
+            StatementResult result = session
+                    .run("CALL neighborhood([3,5], [], 0, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
+
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
+            trueNodeSet.add(3L);
+            trueNodeSet.add(5L);
+
+            ArrayList<Long> trueEdgeSet = new ArrayList<>();
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
+        }
+    }
+
+    @Test
+    public void neighborhoodTest2() {
+
+        try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+             Session session = driver.session()) {
+
+            session.run(AdvancedQueryTest.paperFig11Graph);
+            StatementResult result = session
+                    .run("CALL neighborhood([3,5], [], -1, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000) YIELD nodes, edges return nodes, edges");
+
+            Record r = result.single();
+            Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
+                    .collect(Collectors.toSet());
+            Set<Long> edgeSet = r.get("edges").asList().stream().map(x -> ((InternalRelationship) x).id())
+                    .collect(Collectors.toSet());
+            ArrayList<Long> trueNodeSet = new ArrayList<>();
+            trueNodeSet.add(3L);
+            trueNodeSet.add(5L);
+
+            ArrayList<Long> trueEdgeSet = new ArrayList<>();
+            assertThat(nodeSet.containsAll(trueNodeSet)).isEqualTo(true);
+            assertThat(edgeSet.containsAll(trueEdgeSet)).isEqualTo(true);
+        }
+    }
+
     private String readFile(String filePath) {
         StringBuilder contentBuilder = new StringBuilder();
 

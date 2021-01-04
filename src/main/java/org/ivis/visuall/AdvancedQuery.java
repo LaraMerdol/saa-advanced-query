@@ -112,6 +112,51 @@ public class AdvancedQuery {
     }
 
     /**
+     * finds neighborhood from given nodes with length limit
+     * @param ids          node ids to find the minimal connected graph
+     * @param ignoredTypes node or edge types to be ignored
+     * @param lengthLimit  maximum length of a path between "ids"
+     * @param isDirected   is direction important?
+     * @param pageSize     return at maximum this number of nodes, always returns "ids"
+     * @param currPage     which page do yoy want to return
+     * @param filterTxt    filter results by text
+     * @param isIgnoreCase should ignore case in text filtering?
+     * @param orderBy      order elements by a property
+     * @param orderDir     order direction
+     * @return minimal sub-graph
+     */
+    @Procedure(value = "neighborhood", mode = Mode.WRITE)
+    @Description("finds the minimal sub-graph from given nodes")
+    public Stream<Output> neighborhood(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
+                                          @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
+                                          @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
+                                          @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
+                                          @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
+                                          @Name("inclusionType") long inclusionType, @Name("timeout") long timeout) throws Exception {
+        long executionStarted = System.nanoTime();
+        TimeChecker timeChecker = new TimeChecker(timeout);
+        BFSOutput o1 = neighborhoodBFS(ids, ignoredTypes, lengthLimit, isDirected);
+        this.endMeasuringTime("neighborhood", executionStarted);
+        o1.nodes.removeIf(ids::contains);
+        executionStarted = System.nanoTime();
+        o1 = this.filterByDate(o1, startTime, endTime, timeMapping, inclusionType);
+        this.endMeasuringTime("Filter by date", executionStarted);
+        executionStarted = System.nanoTime();
+        int cntSrcNode = ids.size();
+        int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
+        long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
+        Output o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
+        o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
+        this.endMeasuringTime("Filter by date", executionStarted);
+        if (numSrcNode2return > 0) {
+            int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
+            int toIdx = Math.min(cntSrcNode, (int) (currPage * pageSize));
+            this.addSourceNodes(o2, ids.subList(fromIdx, toIdx));
+        }
+        return Stream.of(o2);
+    }
+
+    /**
      * testing for error
      */
     @Procedure(value = "error", mode = Mode.WRITE)
@@ -324,6 +369,62 @@ public class AdvancedQuery {
             o.nodes.add(n);
             o.nodeClass.add(n.getLabels().iterator().next().name());
         }
+    }
+
+    /**
+     * finds neighborhood from given node ids with the length limit
+     * @param ids          source nodes to find the minimal sub-graph
+     * @param ignoredTypes list of strings which are ignored types
+     * @param lengthLimit  maximum left of a path between any 2 source nodes
+     * @param isDirected   is directed?
+     * @return a set of nodes and edges which is sub-graph
+     */
+    private BFSOutput neighborhoodBFS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected) throws Exception {
+        BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
+        HashSet<Long> srcNodes = new HashSet<>(ids);
+        HashSet<Long> visitedNodes = new HashSet<>();
+        Queue<Long> queue = new LinkedList<>(ids);
+
+        RelationshipType[] allowedEdgeTypesArr = getValidRelationshipTypes(ignoredTypes);
+        HashSet<String> ignoredTypesSet = new HashSet<>(ignoredTypes);
+        Direction dir = Direction.OUTGOING;
+        if (!isDirected) {
+            dir = Direction.BOTH;
+        }
+        int currDepth = 0;
+        int queueSizeBeforeMe = 0;
+        boolean isPendingDepthIncrease = false;
+        while (!queue.isEmpty()) {
+            if (queueSizeBeforeMe == 0) {
+                currDepth++;
+                isPendingDepthIncrease = true;
+            }
+            if (currDepth == lengthLimit + 1) {
+                break;
+            }
+            Node curr = this.db.getNodeById(queue.remove());
+            queueSizeBeforeMe--;
+            visitedNodes.add(curr.getId());
+
+            Iterable<Relationship> edges = curr.getRelationships(dir, allowedEdgeTypesArr);
+            for (Relationship e : edges) {
+                Node n = e.getOtherNode(curr);
+                long id = n.getId();
+                boolean isIgnore = !srcNodes.contains(id) && this.isNodeIgnored(n, ignoredTypesSet);
+                if (isIgnore || visitedNodes.contains(id)) {
+                    continue;
+                }
+                r.nodes.add(id);
+                r.edges.add(e.getId());
+                visitedNodes.add(id);
+                if (isPendingDepthIncrease) {
+                    queueSizeBeforeMe = queue.size();
+                    isPendingDepthIncrease = false;
+                }
+                queue.add(id);
+            }
+        }
+        return r;
     }
 
     /**
