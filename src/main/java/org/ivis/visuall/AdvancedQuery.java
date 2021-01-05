@@ -43,7 +43,7 @@ public class AdvancedQuery {
                                           @Name("inclusionType") long inclusionType, @Name("timeout") long timeout) throws Exception {
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
-        BFSOutput o1 = GoI(ids, ignoredTypes, lengthLimit, isDirected, false, timeChecker);
+        BFSOutput o1 = GoI(ids, ignoredTypes, lengthLimit, isDirected, timeChecker);
         this.endMeasuringTime("Graph of interest", executionStarted);
         o1.nodes.removeIf(ids::contains);
         executionStarted = System.nanoTime();
@@ -89,7 +89,7 @@ public class AdvancedQuery {
                                                    @Name("inclusionType") long inclusionType, @Name("timeout") long timeout) throws Exception {
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
-        CSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, false, timeChecker);
+        CSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, timeChecker);
         this.endMeasuringTime("Common stream", executionStarted);
         o1.nodes.removeIf(ids::contains);
         BFSOutput bfsOutput = new BFSOutput(o1.nodes, o1.edges);
@@ -434,10 +434,9 @@ public class AdvancedQuery {
      * @param ignoredTypes list of strings which are ignored types
      * @param lengthLimit  maximum left of a path between any 2 source nodes
      * @param isDirected   is directed?
-     * @param isOnlyNode   should return only the nodes?
      * @return a set of nodes and edges which is sub-graph
      */
-    private BFSOutput GoI(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected, boolean isOnlyNode, TimeChecker timeChecker) throws Exception {
+    private BFSOutput GoI(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected, TimeChecker timeChecker) throws Exception {
         HashSet<Long> idSet = new HashSet<>(ids);
         HashMap<Long, LabelData> edgeLabels = new HashMap<>();
         HashMap<Long, LabelData> nodeLabels = new HashMap<>();
@@ -466,10 +465,6 @@ public class AdvancedQuery {
         this.purify(idSet, r);
         r = this.removeOrphanEdges(r);
 
-        if (isOnlyNode) {
-            r.edges.clear();
-            return r;
-        }
         return r;
     }
 
@@ -480,10 +475,9 @@ public class AdvancedQuery {
      * @param ignoredTypes list of strings which are ignored types
      * @param lengthLimit  maximum depth
      * @param direction    should be 0 or 1
-     * @param isOnlyNode   if true, returns only nodes
      * @return Outputs a list of nodes and edges (Cypher does not accept HashSet)
      */
-    private CSOutput CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction, boolean isOnlyNode, TimeChecker timeChecker) throws Exception {
+    private CSOutput CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction, TimeChecker timeChecker) throws Exception {
 
         HashSet<Long> resultNodes = new HashSet<>();
 
@@ -568,9 +562,6 @@ public class AdvancedQuery {
         this.purify(s1, r);
         r = this.removeOrphanEdges(r);
 
-        if (isOnlyNode) {
-            r.edges.clear();
-        }
         return new CSOutput(r.nodes, r.edges, resultNodes);
     }
 
@@ -918,14 +909,6 @@ public class AdvancedQuery {
         }
     }
 
-    public static class LongOup {
-        public long out;
-
-        public LongOup(long n) {
-            this.out = n;
-        }
-    }
-
     public static class BFSOutput {
         public HashSet<Long> nodes;
         public HashSet<Long> edges;
@@ -982,8 +965,8 @@ public class AdvancedQuery {
     }
 
     public static class TimeChecker {
-        private long _startTime;    // in nano seconds
-        private long _timeout;  // in milli seconds
+        private final long _startTime;    // in nano seconds
+        private final long _timeout;  // in milli seconds
 
         /**
          * @param timeout maximum allowed duration in milliseconds
