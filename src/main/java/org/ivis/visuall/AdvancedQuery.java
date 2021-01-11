@@ -40,7 +40,7 @@ public class AdvancedQuery {
                                           @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
                                           @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
                                           @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
-                                          @Name("inclusionType") long inclusionType, @Name("timeout") long timeout) throws Exception {
+                                          @Name("inclusionType") long inclusionType, @Name("timeout") long timeout, @Name("idFilter") List<Long> idFilter) throws Exception {
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
         BFSOutput o1 = GoI(ids, ignoredTypes, lengthLimit, isDirected, timeChecker);
@@ -53,8 +53,15 @@ public class AdvancedQuery {
         int cntSrcNode = ids.size();
         int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
-        Output o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
-        o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
+        Output o2;
+        if (idFilter == null) {
+            o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
+            o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
+        } else {
+            idFilter.addAll(ids);
+            o2 = this.idFiltering(o1, idFilter);
+        }
+
         this.endMeasuringTime("Filter by date", executionStarted);
         if (numSrcNode2return > 0) {
             int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
@@ -86,7 +93,7 @@ public class AdvancedQuery {
                                                    @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
                                                    @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
                                                    @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
-                                                   @Name("inclusionType") long inclusionType, @Name("timeout") long timeout) throws Exception {
+                                                   @Name("inclusionType") long inclusionType, @Name("timeout") long timeout, @Name("idFilter") List<Long> idFilter) throws Exception {
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
         CSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, timeChecker);
@@ -100,8 +107,15 @@ public class AdvancedQuery {
         int cntSrcNode = ids.size();
         int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
-        Output o2 = this.tableFiltering(bfsOutput, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
-        o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
+        Output o2;
+        if (idFilter == null) {
+            o2 = this.tableFiltering(bfsOutput, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
+            o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
+        } else {
+            idFilter.addAll(ids);
+            o2 = this.idFiltering(bfsOutput, idFilter);
+        }
+
         this.endMeasuringTime("Table filtering", executionStarted);
         if (numSrcNode2return > 0) {
             int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
@@ -113,6 +127,7 @@ public class AdvancedQuery {
 
     /**
      * finds neighborhood from given nodes with length limit
+     *
      * @param ids          node ids to find the minimal connected graph
      * @param ignoredTypes node or edge types to be ignored
      * @param lengthLimit  maximum length of a path between "ids"
@@ -128,11 +143,11 @@ public class AdvancedQuery {
     @Procedure(value = "neighborhood", mode = Mode.WRITE)
     @Description("finds the minimal sub-graph from given nodes")
     public Stream<Output> neighborhood(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                          @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
-                                          @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
-                                          @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
-                                          @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
-                                          @Name("inclusionType") long inclusionType, @Name("timeout") long timeout) throws Exception {
+                                       @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
+                                       @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
+                                       @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
+                                       @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
+                                       @Name("inclusionType") long inclusionType, @Name("timeout") long timeout, @Name("idFilter") List<Long> idFilter) throws Exception {
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
         BFSOutput o1 = neighborhoodBFS(ids, ignoredTypes, lengthLimit, isDirected);
@@ -145,8 +160,14 @@ public class AdvancedQuery {
         int cntSrcNode = ids.size();
         int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
-        Output o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
-        o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
+        Output o2;
+        if (idFilter == null) {
+            o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
+            o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
+        } else {
+            idFilter.addAll(ids);
+            o2 = this.idFiltering(o1, idFilter);
+        }
         this.endMeasuringTime("Filter by date", executionStarted);
         if (numSrcNode2return > 0) {
             int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
@@ -230,6 +251,59 @@ public class AdvancedQuery {
             r.nodeClass.add(n.getLabels().iterator().next().name());
             r.nodeId.add(n.getId());
         }
+
+        return r;
+    }
+
+    /**
+     * Since result could be big, gives results page by page
+     *
+     * @param o        to be paginated
+     * @param idFilter list of node ids
+     * @return only the edges and nodes related with the the `idFilter`
+     */
+    private Output idFiltering(BFSOutput o, List<Long> idFilter) {
+        HashSet<Long> ids = new HashSet<>(idFilter);
+        HashSet<Long> edges2 = new HashSet<>(o.edges);
+
+        for (long edgeId : edges2) {
+            Relationship e = this.db.getRelationshipById(edgeId);
+            long src = e.getStartNodeId();
+            long tgt = e.getEndNodeId();
+            if (!ids.contains(src) && !ids.contains(tgt)) {
+                o.edges.remove(edgeId);
+            }
+        }
+
+        HashSet<Long> nodes2 = new HashSet<>(o.nodes);
+        for (long nodeId : nodes2) {
+            if (!ids.contains(nodeId)) {
+                o.nodes.remove(nodeId);
+            }
+        }
+
+        Output r = new Output();
+
+        for (long nodeId : o.nodes) {
+            Node n = this.db.getNodeById(nodeId);
+            r.nodes.add(n);
+            r.nodeId.add(nodeId);
+            r.nodeClass.add(n.getLabels().iterator().next().name());
+        }
+
+        for (long edgeId : o.edges) {
+            Relationship e = this.db.getRelationshipById(edgeId);
+            r.edges.add(e);
+            r.edgeClass.add(e.getType().name());
+            r.edgeId.add(edgeId);
+            long src = e.getStartNodeId();
+            long tgt = e.getEndNodeId();
+            ArrayList<Long> l = new ArrayList<>();
+            l.add(src);
+            l.add(tgt);
+            r.edgeSourceTargets.add(l);
+        }
+        r.totalNodeCount = r.nodes.size();
 
         return r;
     }
@@ -373,6 +447,7 @@ public class AdvancedQuery {
 
     /**
      * finds neighborhood from given node ids with the length limit
+     *
      * @param ids          source nodes to find the minimal sub-graph
      * @param ignoredTypes list of strings which are ignored types
      * @param lengthLimit  maximum left of a path between any 2 source nodes
