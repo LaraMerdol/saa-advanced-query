@@ -457,7 +457,7 @@ public class AdvancedQuery {
     private BFSOutput neighborhoodBFS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected) throws Exception {
         BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
         HashSet<Long> srcNodes = new HashSet<>(ids);
-        HashSet<Long> visitedNodes = new HashSet<>();
+        HashSet<Long> visitedEdges = new HashSet<>();
         Queue<Long> queue = new LinkedList<>(ids);
 
         RelationshipType[] allowedEdgeTypesArr = getValidRelationshipTypes(ignoredTypes);
@@ -479,19 +479,19 @@ public class AdvancedQuery {
             }
             Node curr = this.db.getNodeById(queue.remove());
             queueSizeBeforeMe--;
-            visitedNodes.add(curr.getId());
 
             Iterable<Relationship> edges = curr.getRelationships(dir, allowedEdgeTypesArr);
             for (Relationship e : edges) {
                 Node n = e.getOtherNode(curr);
                 long id = n.getId();
+                long edgeId = e.getId();
                 boolean isIgnore = !srcNodes.contains(id) && this.isNodeIgnored(n, ignoredTypesSet);
-                if (isIgnore || visitedNodes.contains(id)) {
+                if (isIgnore || visitedEdges.contains(edgeId)) {
                     continue;
                 }
                 r.nodes.add(id);
                 r.edges.add(e.getId());
-                visitedNodes.add(id);
+                visitedEdges.add(edgeId);
                 if (isPendingDepthIncrease) {
                     queueSizeBeforeMe = queue.size();
                     isPendingDepthIncrease = false;
