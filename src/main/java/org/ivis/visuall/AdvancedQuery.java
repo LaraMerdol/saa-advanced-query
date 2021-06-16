@@ -150,7 +150,7 @@ public class AdvancedQuery {
                                        @Name("inclusionType") long inclusionType, @Name("timeout") long timeout, @Name("idFilter") List<Long> idFilter) throws Exception {
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
-        BFSOutput o1 = neighborhoodBFS(ids, ignoredTypes, lengthLimit, isDirected);
+        BFSOutput o1 = neighborhoodBFS(ids, ignoredTypes, lengthLimit, isDirected, timeChecker);
         this.endMeasuringTime("neighborhood", executionStarted);
         o1.nodes.removeIf(ids::contains);
         executionStarted = System.nanoTime();
@@ -454,7 +454,7 @@ public class AdvancedQuery {
      * @param isDirected   is directed?
      * @return a set of nodes and edges which is sub-graph
      */
-    private BFSOutput neighborhoodBFS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected) throws Exception {
+    private BFSOutput neighborhoodBFS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected, TimeChecker timeChecker) throws Exception {
         BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
         HashSet<Long> srcNodes = new HashSet<>(ids);
         HashSet<Long> visitedEdges = new HashSet<>();
@@ -481,6 +481,7 @@ public class AdvancedQuery {
             queueSizeBeforeMe--;
 
             Iterable<Relationship> edges = curr.getRelationships(dir, allowedEdgeTypesArr);
+            timeChecker.checkTime();
             for (Relationship e : edges) {
                 Node n = e.getOtherNode(curr);
                 long id = n.getId();
@@ -497,6 +498,7 @@ public class AdvancedQuery {
                     isPendingDepthIncrease = false;
                 }
                 queue.add(id);
+                timeChecker.checkTime();
             }
         }
         return r;
