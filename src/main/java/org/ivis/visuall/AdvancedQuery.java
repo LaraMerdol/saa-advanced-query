@@ -18,6 +18,9 @@ public class AdvancedQuery {
     @Context
     public Log log;
 
+    @Context
+    public Transaction tx;
+
     /**
      * finds the minimal sub-graph from given nodes
      *
@@ -25,7 +28,8 @@ public class AdvancedQuery {
      * @param ignoredTypes node or edge types to be ignored
      * @param lengthLimit  maximum length of a path between "ids"
      * @param isDirected   is direction important?
-     * @param pageSize     return at maximum this number of nodes, always returns "ids"
+     * @param pageSize     return at maximum this number of nodes, always returns
+     *                     "ids"
      * @param currPage     which page do yoy want to return
      * @param filterTxt    filter results by text
      * @param isIgnoreCase should ignore case in text filtering?
@@ -33,14 +37,49 @@ public class AdvancedQuery {
      * @param orderDir     order direction
      * @return minimal sub-graph
      */
+
+    // The id property which is an internal unique identifier automatically assigned
+    // to every node and relationship in the Neo4j database is deprecated and
+    // related meyhods will be removed.
+    public Relationship getRelationshipById(long edgeId) {
+        Relationship relationship = tx.getRelationshipById(edgeId); // Assuming you're looking for a relationship by its
+                                                                    // start node
+        return relationship;
+    }
+
+    public Node getNodeById(long nodeId) {
+        Node node = tx.getNodeById(nodeId);
+        return node;
+    }
+
+    /*
+     * public Relationship getRelationshipById(String edgeId) {
+     * Relationship relationship = tx.getRelationshipByElementId(edgeId); //
+     * Assuming you're looking for a relationship by its start node
+     * return relationship;
+     * }
+     * public Node getNodeById(String nodeId) {
+     * Node node = tx.getNodeByElementId(nodeId);
+     * return node;
+     * }
+     */
+
+    public Iterable<RelationshipType> getAllRelationshipTypes() {
+        Iterable<RelationshipType> relationshipTypes = tx.getAllRelationshipTypes();
+        return relationshipTypes;
+    }
+
     @Procedure(value = "graphOfInterest", mode = Mode.WRITE)
     @Description("finds the minimal sub-graph from given nodes")
     public Stream<Output> graphOfInterest(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                          @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
-                                          @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
-                                          @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
-                                          @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
-                                          @Name("inclusionType") long inclusionType, @Name("timeout") long timeout, @Name("idFilter") List<Long> idFilter) throws Exception {
+            @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
+            @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt,
+            @Name("isIgnoreCase") boolean isIgnoreCase,
+            @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
+            @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
+            @Name("endTime") long endTime,
+            @Name("inclusionType") long inclusionType, @Name("timeout") long timeout,
+            @Name("idFilter") List<Long> idFilter) throws Exception {
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
         BFSOutput o1 = GoI(ids, ignoredTypes, lengthLimit, isDirected, timeChecker);
@@ -55,7 +94,8 @@ public class AdvancedQuery {
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
         Output o2;
         if (idFilter == null) {
-            o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
+            o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy,
+                    orderDir);
             o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
         } else {
             idFilter.addAll(ids);
@@ -72,28 +112,36 @@ public class AdvancedQuery {
     }
 
     /**
-     * finds common nodes and edges on the downstream or upstream or undirected stream
+     * finds common nodes and edges on the downstream or upstream or undirected
+     * stream
      *
      * @param ids          node ids
      * @param ignoredTypes node or edge types to be ignored
      * @param lengthLimit  maximum depth
-     * @param direction    INCOMING means upstream (regulator), OUTGOING means downstream (target)
-     * @param pageSize     return at maximum this number of nodes, always returns "ids"
+     * @param direction    INCOMING means upstream (regulator), OUTGOING means
+     *                     downstream (target)
+     * @param pageSize     return at maximum this number of nodes, always returns
+     *                     "ids"
      * @param currPage     which page do yoy want to return
      * @param filterTxt    filter results by text
      * @param isIgnoreCase should ignore case in text filtering?
      * @param orderBy      order elements by a property
      * @param orderDir     order direction
-     * @return sub-graph which contains sources and targets/regulators with paths between
+     * @return sub-graph which contains sources and targets/regulators with paths
+     *         between
      */
     @Procedure(value = "commonStream", mode = Mode.WRITE)
     @Description("From specified nodes forms founds common upstream/downstream (target/regulator)")
-    public Stream<CommonStreamOutput> commonStream(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                                   @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
-                                                   @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
-                                                   @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
-                                                   @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
-                                                   @Name("inclusionType") long inclusionType, @Name("timeout") long timeout, @Name("idFilter") List<Long> idFilter) throws Exception {
+    public Stream<CommonStreamOutput> commonStream(@Name("ids") List<Long> ids,
+            @Name("ignoredTypes") List<String> ignoredTypes,
+            @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
+            @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt,
+            @Name("isIgnoreCase") boolean isIgnoreCase,
+            @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
+            @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
+            @Name("endTime") long endTime,
+            @Name("inclusionType") long inclusionType, @Name("timeout") long timeout,
+            @Name("idFilter") List<Long> idFilter) throws Exception {
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
         CSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, timeChecker);
@@ -109,7 +157,8 @@ public class AdvancedQuery {
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
         Output o2;
         if (idFilter == null) {
-            o2 = this.tableFiltering(bfsOutput, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
+            o2 = this.tableFiltering(bfsOutput, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy,
+                    orderDir);
             o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
         } else {
             idFilter.addAll(ids);
@@ -132,7 +181,8 @@ public class AdvancedQuery {
      * @param ignoredTypes node or edge types to be ignored
      * @param lengthLimit  maximum length of a path between "ids"
      * @param isDirected   is direction important?
-     * @param pageSize     return at maximum this number of nodes, always returns "ids"
+     * @param pageSize     return at maximum this number of nodes, always returns
+     *                     "ids"
      * @param currPage     which page do yoy want to return
      * @param filterTxt    filter results by text
      * @param isIgnoreCase should ignore case in text filtering?
@@ -143,11 +193,14 @@ public class AdvancedQuery {
     @Procedure(value = "neighborhood", mode = Mode.WRITE)
     @Description("finds the minimal sub-graph from given nodes")
     public Stream<Output> neighborhood(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
-                                       @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
-                                       @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt, @Name("isIgnoreCase") boolean isIgnoreCase,
-                                       @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
-                                       @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime, @Name("endTime") long endTime,
-                                       @Name("inclusionType") long inclusionType, @Name("timeout") long timeout, @Name("idFilter") List<Long> idFilter) throws Exception {
+            @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
+            @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt,
+            @Name("isIgnoreCase") boolean isIgnoreCase,
+            @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
+            @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
+            @Name("endTime") long endTime,
+            @Name("inclusionType") long inclusionType, @Name("timeout") long timeout,
+            @Name("idFilter") List<Long> idFilter) throws Exception {
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
         BFSOutput o1 = neighborhoodBFS(ids, ignoredTypes, lengthLimit, isDirected, timeChecker);
@@ -162,7 +215,8 @@ public class AdvancedQuery {
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
         Output o2;
         if (idFilter == null) {
-            o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy, orderDir);
+            o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy,
+                    orderDir);
             o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
         } else {
             idFilter.addAll(ids);
@@ -198,7 +252,8 @@ public class AdvancedQuery {
      * @param orderDir     order direction
      * @return a page of o
      */
-    private Output tableFiltering(BFSOutput o, long pageSize, int skip, String filterTxt, boolean isIgnoreCase, String orderBy, long orderDir) {
+    private Output tableFiltering(BFSOutput o, long pageSize, int skip, String filterTxt, boolean isIgnoreCase,
+            String orderBy, long orderDir) {
         Output r = this.filterByTxt(o, filterTxt, isIgnoreCase);
         r.totalNodeCount = r.nodes.size();
         // sort and paginate
@@ -234,12 +289,13 @@ public class AdvancedQuery {
 
         // get all edges
         for (long edgeId : o.edges) {
-            Relationship e = this.db.getRelationshipById(edgeId);
+            Relationship e = getRelationshipById(edgeId);
+
             r.edges.add(e);
             r.edgeClass.add(e.getType().name());
             r.edgeId.add(edgeId);
-            long src = e.getStartNodeId();
-            long tgt = e.getEndNodeId();
+            long src = e.getStartNode().getId();
+            long tgt = e.getEndNode().getId();
             ArrayList<Long> l = new ArrayList<>();
             l.add(src);
             l.add(tgt);
@@ -267,9 +323,9 @@ public class AdvancedQuery {
         HashSet<Long> edges2 = new HashSet<>(o.edges);
 
         for (long edgeId : edges2) {
-            Relationship e = this.db.getRelationshipById(edgeId);
-            long src = e.getStartNodeId();
-            long tgt = e.getEndNodeId();
+            Relationship e = getRelationshipById(edgeId);
+            long src = e.getStartNode().getId();
+            long tgt = e.getEndNode().getId();
             if (!ids.contains(src) && !ids.contains(tgt)) {
                 o.edges.remove(edgeId);
             }
@@ -285,19 +341,19 @@ public class AdvancedQuery {
         Output r = new Output();
 
         for (long nodeId : o.nodes) {
-            Node n = this.db.getNodeById(nodeId);
+            Node n = getNodeById(nodeId);
             r.nodes.add(n);
             r.nodeId.add(nodeId);
             r.nodeClass.add(n.getLabels().iterator().next().name());
         }
 
         for (long edgeId : o.edges) {
-            Relationship e = this.db.getRelationshipById(edgeId);
+            Relationship e = getRelationshipById(edgeId);
             r.edges.add(e);
             r.edgeClass.add(e.getType().name());
             r.edgeId.add(edgeId);
-            long src = e.getStartNodeId();
-            long tgt = e.getEndNodeId();
+            long src = e.getStartNode().getId();
+            long tgt = e.getEndNode().getId();
             ArrayList<Long> l = new ArrayList<>();
             l.add(src);
             l.add(tgt);
@@ -324,7 +380,7 @@ public class AdvancedQuery {
                 filterTxt = filterTxt.toLowerCase();
             }
             for (long id : o.nodes) {
-                Node n = this.db.getNodeById(id);
+                Node n = getNodeById(id);
                 List<String> l = new ArrayList<>();
                 for (Object p : n.getAllProperties().values()) {
                     if (p.getClass().isArray()) {
@@ -358,7 +414,7 @@ public class AdvancedQuery {
             }
         } else {
             for (long id : o.nodes) {
-                r.nodes.add(this.db.getNodeById(id));
+                r.nodes.add(getNodeById(id));
             }
         }
         return r;
@@ -370,16 +426,18 @@ public class AdvancedQuery {
      * @param o           BFS output
      * @param d1          Unix time formatted time for start date
      * @param d2          Unix time formatted time for end date
-     * @param timeMapping mapping to remark start and end date properties for an entity (Node or Relationship)
+     * @param timeMapping mapping to remark start and end date properties for an
+     *                    entity (Node or Relationship)
      * @return filtered BFS output
      */
-    private BFSOutput filterByDate(BFSOutput o, long d1, long d2, Map<String, List<String>> timeMapping, long inclusionType) {
+    private BFSOutput filterByDate(BFSOutput o, long d1, long d2, Map<String, List<String>> timeMapping,
+            long inclusionType) {
         if (d1 == d2) {
             return o;
         }
         BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
         for (long id : o.nodes) {
-            Node n = this.db.getNodeById(id);
+            Node n = getNodeById(id);
             String nodeType = n.getLabels().iterator().next().name();
             List<String> l = timeMapping.get(nodeType);
             if (l == null) {
@@ -390,7 +448,7 @@ public class AdvancedQuery {
         }
 
         for (long id : o.edges) {
-            Relationship e = this.db.getRelationshipById(id);
+            Relationship e = getRelationshipById(id);
             String edgeType = e.getType().name();
             List<String> l = timeMapping.get(edgeType);
             if (l == null) {
@@ -402,7 +460,8 @@ public class AdvancedQuery {
         return r;
     }
 
-    private void addIfInRange(long id, long d1, long d2, long inclusionType, Entity e, List<String> propNames, HashSet<Long> set) {
+    private void addIfInRange(long id, long d1, long d2, long inclusionType, Entity e, List<String> propNames,
+            HashSet<Long> set) {
         String propStartName = propNames.get(0);
         String propEndName = propNames.get(1);
         boolean has1 = e.hasProperty(propStartName);
@@ -438,7 +497,7 @@ public class AdvancedQuery {
     private void addSourceNodes(Output o, List<Long> ids) {
         // insert source nodes
         for (long id : ids) {
-            Node n = this.db.getNodeById(id);
+            Node n = getNodeById(id);
             o.nodeId.add(id);
             o.nodes.add(n);
             o.nodeClass.add(n.getLabels().iterator().next().name());
@@ -454,7 +513,8 @@ public class AdvancedQuery {
      * @param isDirected   is directed?
      * @return a set of nodes and edges which is sub-graph
      */
-    private BFSOutput neighborhoodBFS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected, TimeChecker timeChecker) throws Exception {
+    private BFSOutput neighborhoodBFS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected,
+            TimeChecker timeChecker) throws Exception {
         BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
         HashSet<Long> srcNodes = new HashSet<>(ids);
         HashSet<Long> visitedEdges = new HashSet<>();
@@ -477,7 +537,7 @@ public class AdvancedQuery {
             if (currDepth == lengthLimit + 1) {
                 break;
             }
-            Node curr = this.db.getNodeById(queue.remove());
+            Node curr = getNodeById(queue.remove());
             queueSizeBeforeMe--;
 
             Iterable<Relationship> edges = curr.getRelationships(dir, allowedEdgeTypesArr);
@@ -513,7 +573,8 @@ public class AdvancedQuery {
      * @param isDirected   is directed?
      * @return a set of nodes and edges which is sub-graph
      */
-    private BFSOutput GoI(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected, TimeChecker timeChecker) throws Exception {
+    private BFSOutput GoI(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected,
+            TimeChecker timeChecker) throws Exception {
         HashSet<Long> idSet = new HashSet<>(ids);
         HashMap<Long, LabelData> edgeLabels = new HashMap<>();
         HashMap<Long, LabelData> nodeLabels = new HashMap<>();
@@ -521,8 +582,10 @@ public class AdvancedQuery {
             nodeLabels.put(id, new LabelData(0, 0));
         }
 
-        BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.OUTGOING, isDirected, false, timeChecker, idSet);
-        BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.INCOMING, isDirected, false, timeChecker, idSet);
+        BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.OUTGOING,
+                isDirected, false, timeChecker, idSet);
+        BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.INCOMING,
+                isDirected, false, timeChecker, idSet);
         o1.edges.addAll(o2.edges);
         o1.nodes.addAll(o2.nodes);
 
@@ -554,7 +617,8 @@ public class AdvancedQuery {
      * @param direction    should be 0 or 1
      * @return Outputs a list of nodes and edges (Cypher does not accept HashSet)
      */
-    private CSOutput CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction, TimeChecker timeChecker) throws Exception {
+    private CSOutput CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction,
+            TimeChecker timeChecker) throws Exception {
 
         HashSet<Long> resultNodes = new HashSet<>();
 
@@ -589,11 +653,15 @@ public class AdvancedQuery {
         BFSOutput o1, o2;
         if (d == Direction.OUTGOING) { // means common target
             if (s1.size() < resultNodes.size()) {
-                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true, false, timeChecker, unignorable);
-                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true, true, timeChecker, unignorable);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true, false,
+                        timeChecker, unignorable);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true,
+                        true, timeChecker, unignorable);
             } else {
-                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true, false, timeChecker, unignorable);
-                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true, true, timeChecker, unignorable);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, true,
+                        false, timeChecker, unignorable);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, true, true,
+                        timeChecker, unignorable);
             }
         } else if (d == Direction.INCOMING) { // means common regulator
             for (Long id : s1) {
@@ -603,19 +671,27 @@ public class AdvancedQuery {
                 nodeLabels.put(id, new LabelData(0, lengthLimit + 1));
             }
             if (s1.size() < resultNodes.size()) {
-                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true, false, timeChecker, unignorable);
-                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true, true, timeChecker, unignorable);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true, false,
+                        timeChecker, unignorable);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true,
+                        true, timeChecker, unignorable);
             } else {
-                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true, false, timeChecker, unignorable);
-                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true, true, timeChecker, unignorable);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.OUTGOING, true,
+                        false, timeChecker, unignorable);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true, true,
+                        timeChecker, unignorable);
             }
         } else {
             if (s1.size() < resultNodes.size()) {
-                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, false, false, timeChecker, unignorable);
-                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, false, true, timeChecker, unignorable);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, false, false,
+                        timeChecker, unignorable);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, false,
+                        true, timeChecker, unignorable);
             } else {
-                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, false, false, timeChecker, unignorable);
-                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, false, true, timeChecker, unignorable);
+                o2 = GoI_BFS(nodeLabels, edgeLabels, resultNodes, ignoredTypes, lengthLimit, Direction.INCOMING, false,
+                        false, timeChecker, unignorable);
+                o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.OUTGOING, false, true,
+                        timeChecker, unignorable);
             }
         }
 
@@ -654,7 +730,7 @@ public class AdvancedQuery {
      * @return HashSet<Long>
      */
     private HashSet<Long> CS_BFS(HashMap<Long, Integer> node2Reached, long nodeId, List<String> ignoredTypes,
-                                 long depthLimit, Direction dir) {
+            long depthLimit, Direction dir) {
         HashSet<Long> visitedNodes = new HashSet<>();
         visitedNodes.add(nodeId);
 
@@ -677,13 +753,14 @@ public class AdvancedQuery {
                 break;
             }
 
-            Node curr = this.db.getNodeById(queue.remove());
+            Node curr = getNodeById(queue.remove());
             queueSizeBeforeMe--;
 
             Iterable<Relationship> edges = curr.getRelationships(dir, allowedEdgeTypesArr);
             for (Relationship e : edges) {
                 Node n = e.getOtherNode(curr);
                 long id = n.getId();
+
                 if ((id != nodeId && this.isNodeIgnored(n, ignoredTypesSet)) || visitedNodes.contains(id)) {
                     continue;
                 }
@@ -724,7 +801,8 @@ public class AdvancedQuery {
     }
 
     /**
-     * map number to order direction, 0: OUTGOING (downstream), 1: INCOMING (upstream), 2:
+     * map number to order direction, 0: OUTGOING (downstream), 1: INCOMING
+     * (upstream), 2:
      * BOTH
      *
      * @param n number for enum
@@ -747,7 +825,7 @@ public class AdvancedQuery {
     private RelationshipType[] getValidRelationshipTypes(List<String> ignoredTypes) {
         // prepare the edge types and direction
         ArrayList<RelationshipType> allowedEdgeTypes = new ArrayList<>();
-        ResourceIterable<RelationshipType> allEdgeTypes = this.db.getAllRelationshipTypes();
+        Iterable<RelationshipType> allEdgeTypes = (Iterable<RelationshipType>) getAllRelationshipTypes();
 
         for (RelationshipType r : allEdgeTypes) {
             String name = r.name();
@@ -760,7 +838,8 @@ public class AdvancedQuery {
     }
 
     /**
-     * breadth-first search for graph of interest. keeps "fwd" and "rev" data for each node and edge as "LabelData"
+     * breadth-first search for graph of interest. keeps "fwd" and "rev" data for
+     * each node and edge as "LabelData"
      *
      * @param nodeLabels   labels for nodes, should be persist to next calls
      * @param edgeLabels   labels for edges, should be persist to next calls
@@ -772,8 +851,8 @@ public class AdvancedQuery {
      * @return graph elements visited
      */
     private BFSOutput GoI_BFS(HashMap<Long, LabelData> nodeLabels, HashMap<Long, LabelData> edgeLabels,
-                              HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir, boolean isDirected,
-                              boolean isFollowLabeled, TimeChecker timeChecker, HashSet<Long> unignorable) throws Exception {
+            HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir, boolean isDirected,
+            boolean isFollowLabeled, TimeChecker timeChecker, HashSet<Long> unignorable) throws Exception {
         HashSet<Long> nodeSet = new HashSet<>();
         HashSet<Long> edgeSet = new HashSet<>();
         HashSet<Long> visitedEdges = new HashSet<>();
@@ -791,14 +870,15 @@ public class AdvancedQuery {
         while (!queue.isEmpty()) {
             long n1 = queue.remove();
 
-            Iterable<Relationship> edges = this.db.getNodeById(n1).getRelationships(d, allowedEdgeTypesArr);
+            Iterable<Relationship> edges = getNodeById(n1).getRelationships(d, allowedEdgeTypesArr);
             timeChecker.checkTime();
             for (Relationship e : edges) {
                 long edgeId = e.getId();
-                Node n2 = e.getOtherNode(this.db.getNodeById(n1));
+                Node n2 = e.getOtherNode(getNodeById(n1));
                 long n2Id = n2.getId();
                 LabelData labelE = edgeLabels.get(edgeId);
-                boolean isIgnore = !ids.contains(n2Id) && !unignorable.contains(n2Id) && this.isNodeIgnored(n2, ignoredTypesSet);
+                boolean isIgnore = !ids.contains(n2Id) && !unignorable.contains(n2Id)
+                        && this.isNodeIgnored(n2, ignoredTypesSet);
                 if (isIgnore || visitedEdges.contains(edgeId) ||
                         (isFollowLabeled && labelE == null)) {
                     continue;
@@ -855,7 +935,8 @@ public class AdvancedQuery {
     }
 
     /**
-     * chops all the nodes that are connected to only 1 node iteratively, returns a graph where each node is
+     * chops all the nodes that are connected to only 1 node iteratively, returns a
+     * graph where each node is
      * at least degree-2 or inside the list of srcIds
      *
      * @param srcIds   ids of nodes which are sources
@@ -866,10 +947,9 @@ public class AdvancedQuery {
         HashMap<Long, HashSet<Long>> node2node = new HashMap<>();
         subGraph.nodes.addAll(srcIds);
         for (long edgeId : subGraph.edges) {
-            Relationship r = this.db.getRelationshipById(edgeId);
-            long id1 = r.getStartNodeId();
-            long id2 = r.getEndNodeId();
-
+            Relationship r = getRelationshipById(edgeId);
+            long id1 = r.getStartNode().getId();
+            long id2 = r.getEndNode().getId();
             this.insert2AdjList(node2edge, id1, edgeId);
             this.insert2AdjList(node2edge, id2, edgeId);
             // do not consider self-loops
@@ -886,7 +966,8 @@ public class AdvancedQuery {
                 subGraph.nodes.remove(nodeId);
                 subGraph.edges.removeAll(node2edge.get(nodeId));
 
-                // decrement the degree of the other node (node on the other hand of currently deleted orphan node)
+                // decrement the degree of the other node (node on the other hand of currently
+                // deleted orphan node)
                 HashSet<Long> otherNodeIds = node2node.get(nodeId);
                 for (long id : otherNodeIds) {
                     node2node.get(id).remove(nodeId);
@@ -917,9 +998,9 @@ public class AdvancedQuery {
         BFSOutput result = new BFSOutput(elms.nodes, new HashSet<>());
 
         for (long edgeId : elms.edges) {
-            Relationship r = this.db.getRelationshipById(edgeId);
-            long s = r.getStartNodeId();
-            long e = r.getEndNodeId();
+            Relationship r = getRelationshipById(edgeId);
+            long s = r.getStartNode().getId();
+            Long e = r.getEndNode().getId();
             if (elms.nodes.contains(s) && elms.nodes.contains(e)) {
                 result.edges.add(edgeId);
             }
@@ -1046,8 +1127,8 @@ public class AdvancedQuery {
     }
 
     public static class TimeChecker {
-        private final long _startTime;    // in nano seconds
-        private final long _timeout;  // in milli seconds
+        private final long _startTime; // in nano seconds
+        private final long _timeout; // in milli seconds
 
         /**
          * @param timeout maximum allowed duration in milliseconds
@@ -1074,4 +1155,5 @@ public class AdvancedQuery {
         // no ordering
         NONE
     }
+
 }

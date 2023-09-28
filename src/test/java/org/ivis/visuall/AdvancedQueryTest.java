@@ -5,15 +5,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.neo4j.driver.internal.InternalNode;
 import org.neo4j.driver.internal.InternalRelationship;
-import org.neo4j.driver.v1.AuthTokens;
-import org.neo4j.driver.v1.Config;
-import org.neo4j.driver.v1.Driver;
-import org.neo4j.driver.v1.GraphDatabase;
-import org.neo4j.driver.v1.Record;
-import org.neo4j.driver.v1.Session;
-import org.neo4j.harness.ServerControls;
-import org.neo4j.harness.TestServerBuilders;
-import org.neo4j.driver.v1.StatementResult;
+import org.neo4j.driver.AuthTokens;
+import org.neo4j.driver.Config;
+import org.neo4j.driver.Driver;
+import org.neo4j.driver.GraphDatabase;
+import org.neo4j.driver.Record;
+import org.neo4j.driver.Session;
+//import org.neo4j.harness.ServerControls;
+//import org.neo4j.harness.TestServerBuilders;
+import org.neo4j.harness.Neo4j;
+import org.neo4j.harness.Neo4jBuilders;
+//import org.neo4j.driver.v1.StatementResult;
+
+import org.neo4j.driver.Result;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -35,8 +39,8 @@ import java.util.stream.Stream;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class AdvancedQueryTest {
-    private static final Config driverConfig = Config.build().withoutEncryption().toConfig();
-    private ServerControls embeddedDatabaseServer;
+    private static final Config driverConfig = Config.builder().withoutEncryption().build();
+    private Neo4j embeddedDatabaseServer;
     private static final String paperFig11Graph = "CREATE (EPHA3:P{n:'EPHA3'}) CREATE (EPS15:P{n:'EPS15'}) CREATE (P140:P{n:'P140'})"
             + "CREATE (MAP4K1:P{n:'MAP4K1'}) CREATE (EPHB3:P{n:'EPHB3'})"
             + "CREATE (CRKL:P{n:'CRKL'}) CREATE (MAP4K5:P{n:'MAP4K5'}) CREATE (CRK:P{n:'CRK'}) CREATE (PDGFRB:P{n:'PDGFRB'})"
@@ -53,8 +57,8 @@ public class AdvancedQueryTest {
 
     @BeforeEach
     void initializeNeo4j() {
-        this.embeddedDatabaseServer = TestServerBuilders.newInProcessBuilder().withProcedure(AdvancedQuery.class)
-                .newServer();
+        this.embeddedDatabaseServer = Neo4jBuilders.newInProcessBuilder().withProcedure(AdvancedQuery.class)
+                .build();
     }
 
     // Figure 11 in paper
@@ -65,11 +69,7 @@ public class AdvancedQueryTest {
              Session session = driver.session()) {
 
             session.run(AdvancedQueryTest.paperFig11Graph);
-
-
-            StatementResult result = session
-                    .run("CALL graphOfInterest([5,7], [], 1, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
-
+            Result result = session.run("CALL graphOfInterest([5,7], [], 1, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
                     .collect(Collectors.toSet());
@@ -92,7 +92,7 @@ public class AdvancedQueryTest {
              Session session = driver.session()) {
 
             session.run(AdvancedQueryTest.paperFig11Graph);
-            StatementResult result = session
+            Result result = session
                     .run("CALL graphOfInterest([5,7], [], 2, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
@@ -128,7 +128,7 @@ public class AdvancedQueryTest {
              Session session = driver.session()) {
 
             session.run(AdvancedQueryTest.paperFig11Graph);
-            StatementResult result = session.run("CALL graphOfInterest([5,7], [], 2, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 1, null) YIELD nodes, edges return nodes, edges");
+            Result result = session.run("CALL graphOfInterest([5,7], [], 2, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 1, null) YIELD nodes, edges return nodes, edges");
         } catch (Exception e) {
             assertThat(e.getMessage().contains("Timeout occurred! It takes longer than")).isEqualTo(true);
         }
@@ -141,7 +141,7 @@ public class AdvancedQueryTest {
              Session session = driver.session()) {
 
             session.run(AdvancedQueryTest.paperFig11Graph);
-            StatementResult result = session
+            Result result = session
                     .run("CALL graphOfInterest([5,7], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
@@ -196,7 +196,7 @@ public class AdvancedQueryTest {
              Session session = driver.session()) {
 
             session.run(AdvancedQueryTest.paperFig11Graph);
-            StatementResult result = session.run("CALL graphOfInterest([5,7], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 1, null) YIELD nodes, edges return nodes, edges");
+            Result result = session.run("CALL graphOfInterest([5,7], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 1, null) YIELD nodes, edges return nodes, edges");
         } catch (Exception e) {
             assertThat(e.getMessage().contains("Timeout occurred! It takes longer than")).isEqualTo(true);
         }
@@ -209,7 +209,7 @@ public class AdvancedQueryTest {
              Session session = drv.session()) {
 
             // find 1 common downstream of 3 nodes
-            StatementResult result = session
+            Result result = session
                     .run("CALL graphOfInterest([5,7], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             InternalNode n = (InternalNode) result.single().get("nodes").asList().get(0);
@@ -231,7 +231,7 @@ public class AdvancedQueryTest {
 
             int id1 = session.run("match (n:Title) where n.primary_title = 'The Corbett-Fitzsimmons Fight' return ID(n)").single().get(0).asInt();
             int id2 = session.run("match (n:Person) where n.primary_name = 'William K.L. Dickson' return ID(n)").single().get(0).asInt();
-            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
+            Result result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -259,7 +259,7 @@ public class AdvancedQueryTest {
 
             int id1 = session.run("match (n:Title) where n.primary_title = 'The Corbett-Fitzsimmons Fight' return ID(n)").single().get(0).asInt();
             int id2 = session.run("match (n:Title) where n.primary_title = \"Rip's Toast\" return ID(n)").single().get(0).asInt();
-            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 4, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
+            Result result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 4, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -287,7 +287,7 @@ public class AdvancedQueryTest {
 
             int id1 = session.run("match (n:Post) where n.title = 'Percentage width child element in absolutely positioned parent on Internet Explorer 7' return ID(n)").single().get(0).asInt();
             int id2 = session.run("match (n:Post) where n.title = 'Convert Decimal to Double?' return ID(n)").single().get(0).asInt();
-            StatementResult result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, true, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
+            Result result = session.run("CALL graphOfInterest([" + id1 + "," + id2 + "], [], 3, true, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
             Set<Long> nodeSet = r.get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -319,7 +319,7 @@ public class AdvancedQueryTest {
                             + "(n11)-[:KNOWS]->(n14),(n12)-[:KNOWS]->(n14),(n13)-[:KNOWS]->(n14);");
 
             // find 1 common downstream of 3 nodes
-            StatementResult result = session
+            Result result = session
                     .run("CALL commonStream([1,2,3], [], 3, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
@@ -361,7 +361,7 @@ public class AdvancedQueryTest {
              Session session = drv.session()) {
 
             // find 1 common downstream of 3 nodes
-            StatementResult result = session.run(
+            Result result = session.run(
                     "CALL commonStream([1047255, 1049683, 1043696], [], 3, 2, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             InternalNode n = (InternalNode) result.single().get("nodes").asList().get(0);
@@ -385,7 +385,7 @@ public class AdvancedQueryTest {
                             + "(n11)-[:KNOWS]->(n14),(n12)-[:KNOWS]->(n14),(n13)-[:KNOWS]->(n14);");
 
             // find 1 common downstream of 2 nodes
-            StatementResult result = session
+            Result result = session
                     .run("CALL commonStream([1,3], [], 3, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
@@ -432,7 +432,7 @@ public class AdvancedQueryTest {
                             + "(n11)-[:KNOWS]->(n15),(n12)-[:KNOWS]->(n15),(n13)-[:KNOWS]->(n15);");
 
             // find 2 common downstream of 3 nodes
-            StatementResult result = session
+            Result result = session
                     .run("CALL commonStream([1,2,3], [], 3, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Set<Long> s = result.single().get("nodes").asList().stream().map(x -> ((InternalNode) x).id())
@@ -460,7 +460,7 @@ public class AdvancedQueryTest {
                             + "(n11)<-[:KNOWS]-(n15),(n12)-[:KNOWS]->(n15),(n13)-[:KNOWS]->(n15);");
 
             // find 2 common downstream of 3 nodes
-            StatementResult result = session
+            Result result = session
                     .run("CALL commonStream([1,2,3], [], 3, 2, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
@@ -511,7 +511,7 @@ public class AdvancedQueryTest {
                             + "(n11)<-[:KNOWS]-(n14),(n12)<-[:KNOWS]-(n14),(n13)<-[:KNOWS]-(n14);");
 
 
-            StatementResult result = session
+            Result result = session
                     .run("CALL commonStream([1,2,3], [], 3, 1, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
@@ -562,7 +562,7 @@ public class AdvancedQueryTest {
                             + "(n11)-[:KNOWS]->(n14),(n12)-[:KNOWS]->(n14),(n13)-[:KNOWS]->(n14);");
 
 
-            StatementResult result = session
+            Result result = session
                     .run("CALL commonStream([1,2,3], [], 1, 0, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             assertThat(result.single().get("nodes").asList().size()).isEqualTo(3);
@@ -584,7 +584,7 @@ public class AdvancedQueryTest {
                             + "(n7)<-[:KNOWS]-(n11),(n8)<-[:KNOWS]-(n12),(n9)<-[:KNOWS]-(n13),"
                             + "(n11)<-[:KNOWS]-(n14),(n12)<-[:KNOWS]-(n14),(n13)<-[:KNOWS]-(n14);");
 
-            StatementResult result = session
+            Result result = session
                     .run("CALL commonStream([1,2,3], [], 2, 1, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             assertThat(result.single().get("nodes").asList().size()).isEqualTo(3);
@@ -598,7 +598,7 @@ public class AdvancedQueryTest {
              Session session = driver.session()) {
 
             session.run("CREATE (n1:Person {name:'n1', primary_profession: ['actress', 'soundtrack'], age: 35}) CREATE (n2:Person {age: 29, name:'n2', primary_profession: ['actor', 'soundtrack']});");
-            StatementResult result = session
+            Result result = session
                     .run("CALL  graphOfInterest([1], [], 1, false, 100, 1, 'actress', false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
         }
     }
@@ -610,7 +610,7 @@ public class AdvancedQueryTest {
              Session session = driver.session()) {
 
             session.run(AdvancedQueryTest.paperFig11Graph);
-            StatementResult result = session
+            Result result = session
                     .run("CALL neighborhood([3,5], [], 1, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
@@ -643,7 +643,7 @@ public class AdvancedQueryTest {
              Session session = driver.session()) {
 
             session.run(AdvancedQueryTest.paperFig11Graph);
-            StatementResult result = session
+            Result result = session
                     .run("CALL neighborhood([3,5], [], 0, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
@@ -668,7 +668,7 @@ public class AdvancedQueryTest {
              Session session = driver.session()) {
 
             session.run(AdvancedQueryTest.paperFig11Graph);
-            StatementResult result = session
+            Result result = session
                     .run("CALL neighborhood([3,5], [], -1, false, 100, 1, null, false, null, 2, {}, 0, 0, 0, 10000, null) YIELD nodes, edges return nodes, edges");
 
             Record r = result.single();
