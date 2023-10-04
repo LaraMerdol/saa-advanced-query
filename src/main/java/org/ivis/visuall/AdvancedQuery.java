@@ -21,47 +21,33 @@ public class AdvancedQuery {
     @Context
     public Transaction tx;
 
+    // The id property which is an internal unique identifier automatically assigned
+    // to every node and relationship in the Neo4j database is deprecated and
+    // related methods will be removed.
+    public Relationship getRelationshipByElementId(String edgeElementId) {
+        Relationship relationship = tx.getRelationshipByElementId(edgeElementId); // Assuming you're looking for a
+        return relationship;
+    }
+
+    public Node getNodeByElementId(String nodeElementId) {
+        Node node = tx.getNodeByElementId(nodeElementId);
+        return node;
+    }
+
     /**
      * finds the minimal sub-graph from given nodes
      *
-     * @param ids          node ids to find the minimal connected graph
+     * @param elementIds   node element ids to find the minimal connected graph
      * @param ignoredTypes node or edge types to be ignored
      * @param lengthLimit  maximum length of a path between "ids"
      * @param isDirected   is direction important?
      * @param pageSize     return at maximum this number of nodes, always returns
-     *                     "ids"
      * @param currPage     which page do yoy want to return
      * @param filterTxt    filter results by text
      * @param isIgnoreCase should ignore case in text filtering?
      * @param orderBy      order elements by a property
      * @param orderDir     order direction
      * @return minimal sub-graph
-     */
-
-    // The id property which is an internal unique identifier automatically assigned
-    // to every node and relationship in the Neo4j database is deprecated and
-    // related meyhods will be removed.
-    public Relationship getRelationshipById(long edgeId) {
-        Relationship relationship = tx.getRelationshipById(edgeId); // Assuming you're looking for a relationship by its
-                                                                    // start node
-        return relationship;
-    }
-
-    public Node getNodeById(long nodeId) {
-        Node node = tx.getNodeById(nodeId);
-        return node;
-    }
-
-    /*
-     * public Relationship getRelationshipById(String edgeId) {
-     * Relationship relationship = tx.getRelationshipByElementId(edgeId); //
-     * Assuming you're looking for a relationship by its start node
-     * return relationship;
-     * }
-     * public Node getNodeById(String nodeId) {
-     * Node node = tx.getNodeByElementId(nodeId);
-     * return node;
-     * }
      */
 
     public Iterable<RelationshipType> getAllRelationshipTypes() {
@@ -71,7 +57,8 @@ public class AdvancedQuery {
 
     @Procedure(value = "graphOfInterest", mode = Mode.WRITE)
     @Description("finds the minimal sub-graph from given nodes")
-    public Stream<Output> graphOfInterest(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
+    public Stream<Output> graphOfInterest(@Name("elementIds") List<String> elementIds,
+            @Name("ignoredTypes") List<String> ignoredTypes,
             @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
             @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt,
             @Name("isIgnoreCase") boolean isIgnoreCase,
@@ -79,17 +66,17 @@ public class AdvancedQuery {
             @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
             @Name("endTime") long endTime,
             @Name("inclusionType") long inclusionType, @Name("timeout") long timeout,
-            @Name("idFilter") List<Long> idFilter) throws Exception {
+            @Name("idFilter") List<String> idFilter) throws Exception {
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
-        BFSOutput o1 = GoI(ids, ignoredTypes, lengthLimit, isDirected, timeChecker);
+        BFSOutput o1 = GoI(elementIds, ignoredTypes, lengthLimit, isDirected, timeChecker);
         this.endMeasuringTime("Graph of interest", executionStarted);
-        o1.nodes.removeIf(ids::contains);
+        o1.nodes.removeIf(elementIds::contains);
         executionStarted = System.nanoTime();
         o1 = this.filterByDate(o1, startTime, endTime, timeMapping, inclusionType);
         this.endMeasuringTime("Filter by date", executionStarted);
         executionStarted = System.nanoTime();
-        int cntSrcNode = ids.size();
+        int cntSrcNode = elementIds.size();
         int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
         Output o2;
@@ -98,7 +85,7 @@ public class AdvancedQuery {
                     orderDir);
             o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
         } else {
-            idFilter.addAll(ids);
+            idFilter.addAll(elementIds);
             o2 = this.idFiltering(o1, idFilter);
         }
 
@@ -106,7 +93,7 @@ public class AdvancedQuery {
         if (numSrcNode2return > 0) {
             int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
             int toIdx = Math.min(cntSrcNode, (int) (currPage * pageSize));
-            this.addSourceNodes(o2, ids.subList(fromIdx, toIdx));
+            this.addSourceNodes(o2, elementIds.subList(fromIdx, toIdx));
         }
         return Stream.of(o2);
     }
@@ -115,7 +102,7 @@ public class AdvancedQuery {
      * finds common nodes and edges on the downstream or upstream or undirected
      * stream
      *
-     * @param ids          node ids
+     * @param elementIds   node element ids
      * @param ignoredTypes node or edge types to be ignored
      * @param lengthLimit  maximum depth
      * @param direction    INCOMING means upstream (regulator), OUTGOING means
@@ -132,7 +119,7 @@ public class AdvancedQuery {
      */
     @Procedure(value = "commonStream", mode = Mode.WRITE)
     @Description("From specified nodes forms founds common upstream/downstream (target/regulator)")
-    public Stream<CommonStreamOutput> commonStream(@Name("ids") List<Long> ids,
+    public Stream<CommonStreamOutput> commonStream(@Name("elementIds") List<String> elementIds,
             @Name("ignoredTypes") List<String> ignoredTypes,
             @Name("lengthLimit") long lengthLimit, @Name("direction") long direction,
             @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt,
@@ -141,18 +128,18 @@ public class AdvancedQuery {
             @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
             @Name("endTime") long endTime,
             @Name("inclusionType") long inclusionType, @Name("timeout") long timeout,
-            @Name("idFilter") List<Long> idFilter) throws Exception {
+            @Name("idFilter") List<String> idFilter) throws Exception {
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
-        CSOutput o1 = this.CS(ids, ignoredTypes, lengthLimit, direction, timeChecker);
+        CSOutput o1 = this.CS(elementIds, ignoredTypes, lengthLimit, direction, timeChecker);
         this.endMeasuringTime("Common stream", executionStarted);
-        o1.nodes.removeIf(ids::contains);
+        o1.nodes.removeIf(elementIds::contains);
         BFSOutput bfsOutput = new BFSOutput(o1.nodes, o1.edges);
         executionStarted = System.nanoTime();
         bfsOutput = this.filterByDate(bfsOutput, startTime, endTime, timeMapping, inclusionType);
         this.endMeasuringTime("Filter by date", executionStarted);
         executionStarted = System.nanoTime();
-        int cntSrcNode = ids.size();
+        int cntSrcNode = elementIds.size();
         int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
         Output o2;
@@ -161,7 +148,7 @@ public class AdvancedQuery {
                     orderDir);
             o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
         } else {
-            idFilter.addAll(ids);
+            idFilter.addAll(elementIds);
             o2 = this.idFiltering(bfsOutput, idFilter);
         }
 
@@ -169,7 +156,7 @@ public class AdvancedQuery {
         if (numSrcNode2return > 0) {
             int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
             int toIdx = Math.min(cntSrcNode, (int) (currPage * pageSize));
-            this.addSourceNodes(o2, ids.subList(fromIdx, toIdx));
+            this.addSourceNodes(o2, elementIds.subList(fromIdx, toIdx));
         }
         return Stream.of(new CommonStreamOutput(o2, new ArrayList<>(o1.targetRegulatorNodes)));
     }
@@ -177,7 +164,7 @@ public class AdvancedQuery {
     /**
      * finds neighborhood from given nodes with length limit
      *
-     * @param ids          node ids to find the minimal connected graph
+     * @param elementIds   node element ids to find the minimal connected graph
      * @param ignoredTypes node or edge types to be ignored
      * @param lengthLimit  maximum length of a path between "ids"
      * @param isDirected   is direction important?
@@ -192,7 +179,7 @@ public class AdvancedQuery {
      */
     @Procedure(value = "neighborhood", mode = Mode.WRITE)
     @Description("finds the minimal sub-graph from given nodes")
-    public Stream<Output> neighborhood(@Name("ids") List<Long> ids, @Name("ignoredTypes") List<String> ignoredTypes,
+    public Stream<Output> neighborhood(@Name("elementIds") List<String> elementIds, @Name("ignoredTypes") List<String> ignoredTypes,
             @Name("lengthLimit") long lengthLimit, @Name("isDirected") boolean isDirected,
             @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt,
             @Name("isIgnoreCase") boolean isIgnoreCase,
@@ -200,17 +187,17 @@ public class AdvancedQuery {
             @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
             @Name("endTime") long endTime,
             @Name("inclusionType") long inclusionType, @Name("timeout") long timeout,
-            @Name("idFilter") List<Long> idFilter) throws Exception {
+            @Name("idFilter") List<String> idFilter) throws Exception {
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
-        BFSOutput o1 = neighborhoodBFS(ids, ignoredTypes, lengthLimit, isDirected, timeChecker);
+        BFSOutput o1 = neighborhoodBFS(elementIds, ignoredTypes, lengthLimit, isDirected, timeChecker);
         this.endMeasuringTime("neighborhood", executionStarted);
-        o1.nodes.removeIf(ids::contains);
+        o1.nodes.removeIf(elementIds::contains);
         executionStarted = System.nanoTime();
         o1 = this.filterByDate(o1, startTime, endTime, timeMapping, inclusionType);
         this.endMeasuringTime("Filter by date", executionStarted);
         executionStarted = System.nanoTime();
-        int cntSrcNode = ids.size();
+        int cntSrcNode = elementIds.size();
         int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
         Output o2;
@@ -219,14 +206,14 @@ public class AdvancedQuery {
                     orderDir);
             o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
         } else {
-            idFilter.addAll(ids);
+            idFilter.addAll(elementIds);
             o2 = this.idFiltering(o1, idFilter);
         }
         this.endMeasuringTime("Filter by date", executionStarted);
         if (numSrcNode2return > 0) {
             int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
             int toIdx = Math.min(cntSrcNode, (int) (currPage * pageSize));
-            this.addSourceNodes(o2, ids.subList(fromIdx, toIdx));
+            this.addSourceNodes(o2, elementIds.subList(fromIdx, toIdx));
         }
         return Stream.of(o2);
     }
@@ -288,15 +275,15 @@ public class AdvancedQuery {
         r.nodes = r.nodes.subList(fromIdx, toIdx);
 
         // get all edges
-        for (long edgeId : o.edges) {
-            Relationship e = getRelationshipById(edgeId);
+        for (String edgeElementId : o.edges) {
+            Relationship e = getRelationshipByElementId(edgeElementId);
 
             r.edges.add(e);
             r.edgeClass.add(e.getType().name());
-            r.edgeId.add(edgeId);
-            long src = e.getStartNode().getId();
-            long tgt = e.getEndNode().getId();
-            ArrayList<Long> l = new ArrayList<>();
+            r.edgeElementId.add(edgeElementId);
+            String src = e.getStartNode().getElementId();
+            String tgt = e.getEndNode().getElementId();
+            ArrayList<String> l = new ArrayList<>();
             l.add(src);
             l.add(tgt);
             r.edgeSourceTargets.add(l);
@@ -305,7 +292,7 @@ public class AdvancedQuery {
         // set meta properties for nodes
         for (Node n : r.nodes) {
             r.nodeClass.add(n.getLabels().iterator().next().name());
-            r.nodeId.add(n.getId());
+            r.nodeElementId.add(n.getElementId());
         }
 
         return r;
@@ -315,46 +302,46 @@ public class AdvancedQuery {
      * Since result could be big, gives results page by page
      *
      * @param o        to be paginated
-     * @param idFilter list of node ids
+     * @param idFilter list of node elementIds
      * @return only the edges and nodes related with the the `idFilter`
      */
-    private Output idFiltering(BFSOutput o, List<Long> idFilter) {
-        HashSet<Long> ids = new HashSet<>(idFilter);
-        HashSet<Long> edges2 = new HashSet<>(o.edges);
+    private Output idFiltering(BFSOutput o, List<String> idFilter) {
+        HashSet<String> elementIds = new HashSet<>(idFilter);
+        HashSet<String> edges2 = new HashSet<>(o.edges);
 
-        for (long edgeId : edges2) {
-            Relationship e = getRelationshipById(edgeId);
-            long src = e.getStartNode().getId();
-            long tgt = e.getEndNode().getId();
-            if (!ids.contains(src) && !ids.contains(tgt)) {
-                o.edges.remove(edgeId);
+        for (String edgeElementId : edges2) {
+            Relationship e = getRelationshipByElementId(edgeElementId);
+            String src = e.getStartNode().getElementId();
+            String tgt = e.getEndNode().getElementId();
+            if (!elementIds.contains(src) && !elementIds.contains(tgt)) {
+                o.edges.remove(edgeElementId);
             }
         }
 
-        HashSet<Long> nodes2 = new HashSet<>(o.nodes);
-        for (long nodeId : nodes2) {
-            if (!ids.contains(nodeId)) {
-                o.nodes.remove(nodeId);
+        HashSet<String> nodes2 = new HashSet<>(o.nodes);
+        for (String nodeElementId : nodes2) {
+            if (!elementIds.contains(nodeElementId)) {
+                o.nodes.remove(nodeElementId);
             }
         }
 
         Output r = new Output();
 
-        for (long nodeId : o.nodes) {
-            Node n = getNodeById(nodeId);
+        for (String nodeId : o.nodes) {
+            Node n = getNodeByElementId(nodeId);
             r.nodes.add(n);
-            r.nodeId.add(nodeId);
+            r.nodeElementId.add(nodeId);
             r.nodeClass.add(n.getLabels().iterator().next().name());
         }
 
-        for (long edgeId : o.edges) {
-            Relationship e = getRelationshipById(edgeId);
+        for (String edgeElementId : o.edges) {
+            Relationship e = getRelationshipByElementId(edgeElementId);
             r.edges.add(e);
             r.edgeClass.add(e.getType().name());
-            r.edgeId.add(edgeId);
-            long src = e.getStartNode().getId();
-            long tgt = e.getEndNode().getId();
-            ArrayList<Long> l = new ArrayList<>();
+            r.edgeElementId.add(edgeElementId);
+            String src = e.getStartNode().getElementId();
+            String tgt = e.getEndNode().getElementId();
+            ArrayList<String> l = new ArrayList<>();
             l.add(src);
             l.add(tgt);
             r.edgeSourceTargets.add(l);
@@ -379,8 +366,8 @@ public class AdvancedQuery {
             if (isIgnoreCase) {
                 filterTxt = filterTxt.toLowerCase();
             }
-            for (long id : o.nodes) {
-                Node n = getNodeById(id);
+            for (String id : o.nodes) {
+                Node n = getNodeByElementId(id);
                 List<String> l = new ArrayList<>();
                 for (Object p : n.getAllProperties().values()) {
                     if (p.getClass().isArray()) {
@@ -413,8 +400,8 @@ public class AdvancedQuery {
                 }
             }
         } else {
-            for (long id : o.nodes) {
-                r.nodes.add(getNodeById(id));
+            for (String id : o.nodes) {
+                r.nodes.add(getNodeByElementId(id));
             }
         }
         return r;
@@ -436,8 +423,8 @@ public class AdvancedQuery {
             return o;
         }
         BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
-        for (long id : o.nodes) {
-            Node n = getNodeById(id);
+        for (String id : o.nodes) {
+            Node n = getNodeByElementId(id);
             String nodeType = n.getLabels().iterator().next().name();
             List<String> l = timeMapping.get(nodeType);
             if (l == null) {
@@ -447,21 +434,21 @@ public class AdvancedQuery {
             }
         }
 
-        for (long id : o.edges) {
-            Relationship e = getRelationshipById(id);
+        for (String elementId : o.edges) {
+            Relationship e = getRelationshipByElementId(elementId);
             String edgeType = e.getType().name();
             List<String> l = timeMapping.get(edgeType);
             if (l == null) {
-                r.edges.add(id);
+                r.edges.add(elementId);
             } else {
-                this.addIfInRange(id, d1, d2, inclusionType, e, l, r.edges);
+                this.addIfInRange(elementId, d1, d2, inclusionType, e, l, r.edges);
             }
         }
         return r;
     }
 
-    private void addIfInRange(long id, long d1, long d2, long inclusionType, Entity e, List<String> propNames,
-            HashSet<Long> set) {
+    private void addIfInRange(String elementId, long d1, long d2, long inclusionType, Entity e, List<String> propNames,
+            HashSet<String> set) {
         String propStartName = propNames.get(0);
         String propEndName = propNames.get(1);
         boolean has1 = e.hasProperty(propStartName);
@@ -486,39 +473,39 @@ public class AdvancedQuery {
         }
 
         if (inclusionType == 0 && start <= d2 && end >= d1) { // the range and object life-time are overlapping
-            set.add(id);
+            set.add(elementId);
         } else if (inclusionType == 1 && d1 <= start && d2 >= end) { // the range contains the object life-time
-            set.add(id);
+            set.add(elementId);
         } else if (inclusionType == 2 && start <= d1 && end >= d2) { // the range contained by the object life-time
-            set.add(id);
+            set.add(elementId);
         }
     }
 
-    private void addSourceNodes(Output o, List<Long> ids) {
+    private void addSourceNodes(Output o, List<String> elementIds) {
         // insert source nodes
-        for (long id : ids) {
-            Node n = getNodeById(id);
-            o.nodeId.add(id);
+        for (String elementId : elementIds) {
+            Node n = getNodeByElementId(elementId);
+            o.nodeElementId.add(elementId);
             o.nodes.add(n);
             o.nodeClass.add(n.getLabels().iterator().next().name());
         }
     }
 
     /**
-     * finds neighborhood from given node ids with the length limit
+     * finds neighborhood from given node elementIds with the length limit
      *
-     * @param ids          source nodes to find the minimal sub-graph
+     * @param elementIds   source nodes to find the minimal sub-graph
      * @param ignoredTypes list of strings which are ignored types
      * @param lengthLimit  maximum left of a path between any 2 source nodes
      * @param isDirected   is directed?
      * @return a set of nodes and edges which is sub-graph
      */
-    private BFSOutput neighborhoodBFS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected,
+    private BFSOutput neighborhoodBFS(List<String> elementIds, List<String> ignoredTypes, long lengthLimit, boolean isDirected,
             TimeChecker timeChecker) throws Exception {
         BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
-        HashSet<Long> srcNodes = new HashSet<>(ids);
-        HashSet<Long> visitedEdges = new HashSet<>();
-        Queue<Long> queue = new LinkedList<>(ids);
+        HashSet<String> srcNodes = new HashSet<>(elementIds);
+        HashSet<String> visitedEdges = new HashSet<>();
+        Queue<String> queue = new LinkedList<>(elementIds);
 
         RelationshipType[] allowedEdgeTypesArr = getValidRelationshipTypes(ignoredTypes);
         HashSet<String> ignoredTypesSet = new HashSet<>(ignoredTypes);
@@ -537,27 +524,27 @@ public class AdvancedQuery {
             if (currDepth == lengthLimit + 1) {
                 break;
             }
-            Node curr = getNodeById(queue.remove());
+            Node curr = getNodeByElementId(queue.remove());
             queueSizeBeforeMe--;
 
             Iterable<Relationship> edges = curr.getRelationships(dir, allowedEdgeTypesArr);
             timeChecker.checkTime();
             for (Relationship e : edges) {
                 Node n = e.getOtherNode(curr);
-                long id = n.getId();
-                long edgeId = e.getId();
-                boolean isIgnore = !srcNodes.contains(id) && this.isNodeIgnored(n, ignoredTypesSet);
-                if (isIgnore || visitedEdges.contains(edgeId)) {
+                String elementId = n.getElementId();
+                String edgeElementId = e.getElementId();
+                boolean isIgnore = !srcNodes.contains(elementId) && this.isNodeIgnored(n, ignoredTypesSet);
+                if (isIgnore || visitedEdges.contains(edgeElementId)) {
                     continue;
                 }
-                r.nodes.add(id);
-                r.edges.add(e.getId());
-                visitedEdges.add(edgeId);
+                r.nodes.add(elementId);
+                r.edges.add(e.getElementId());
+                visitedEdges.add(edgeElementId);
                 if (isPendingDepthIncrease) {
                     queueSizeBeforeMe = queue.size();
                     isPendingDepthIncrease = false;
                 }
-                queue.add(id);
+                queue.add(elementId);
                 timeChecker.checkTime();
             }
         }
@@ -567,42 +554,42 @@ public class AdvancedQuery {
     /**
      * finds Graph of Interest from given node ids
      *
-     * @param ids          source nodes to find the minimal sub-graph
+     * @param elementIds   source nodes to find the minimal sub-graph
      * @param ignoredTypes list of strings which are ignored types
      * @param lengthLimit  maximum left of a path between any 2 source nodes
      * @param isDirected   is directed?
      * @return a set of nodes and edges which is sub-graph
      */
-    private BFSOutput GoI(List<Long> ids, List<String> ignoredTypes, long lengthLimit, boolean isDirected,
+    private BFSOutput GoI(List<String> elementIds, List<String> ignoredTypes, long lengthLimit, boolean isDirected,
             TimeChecker timeChecker) throws Exception {
-        HashSet<Long> idSet = new HashSet<>(ids);
-        HashMap<Long, LabelData> edgeLabels = new HashMap<>();
-        HashMap<Long, LabelData> nodeLabels = new HashMap<>();
-        for (Long id : ids) {
-            nodeLabels.put(id, new LabelData(0, 0));
+        HashSet<String> elementIdSet = new HashSet<>(elementIds);
+        HashMap<String, LabelData> edgeLabels = new HashMap<>();
+        HashMap<String, LabelData> nodeLabels = new HashMap<>();
+        for (String elementId : elementIds) {
+            nodeLabels.put(elementId, new LabelData(0, 0));
         }
 
-        BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.OUTGOING,
-                isDirected, false, timeChecker, idSet);
-        BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, idSet, ignoredTypes, lengthLimit, Direction.INCOMING,
-                isDirected, false, timeChecker, idSet);
+        BFSOutput o1 = this.GoI_BFS(nodeLabels, edgeLabels, elementIdSet, ignoredTypes, lengthLimit, Direction.OUTGOING,
+                isDirected, false, timeChecker, elementIdSet);
+        BFSOutput o2 = this.GoI_BFS(nodeLabels, edgeLabels, elementIdSet, ignoredTypes, lengthLimit, Direction.INCOMING,
+                isDirected, false, timeChecker, elementIdSet);
         o1.edges.addAll(o2.edges);
         o1.nodes.addAll(o2.nodes);
 
         BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
-        for (long edgeId : o1.edges) {
-            if (edgeLabels.get(edgeId).fwd + edgeLabels.get(edgeId).rev <= lengthLimit) {
-                r.edges.add(edgeId);
+        for (String edgeElementId : o1.edges) {
+            if (edgeLabels.get(edgeElementId).fwd + edgeLabels.get(edgeElementId).rev <= lengthLimit) {
+                r.edges.add(edgeElementId);
             }
         }
-        for (long nodeId : o1.nodes) {
-            if (nodeLabels.get(nodeId).fwd + nodeLabels.get(nodeId).rev <= lengthLimit) {
-                r.nodes.add(nodeId);
+        for (String nodeElementId : o1.nodes) {
+            if (nodeLabels.get(nodeElementId).fwd + nodeLabels.get(nodeElementId).rev <= lengthLimit) {
+                r.nodes.add(nodeElementId);
             }
         }
-        r.nodes.addAll(ids);
+        r.nodes.addAll(elementIds);
         r = this.removeOrphanEdges(r);
-        this.purify(idSet, r);
+        this.purify(elementIdSet, r);
         r = this.removeOrphanEdges(r);
 
         return r;
@@ -611,43 +598,43 @@ public class AdvancedQuery {
     /**
      * find common stream (up/down/undirected)
      *
-     * @param ids          database ids of nodes
+     * @param elementIds   database element ids of nodes
      * @param ignoredTypes list of strings which are ignored types
      * @param lengthLimit  maximum depth
      * @param direction    should be 0 or 1
      * @return Outputs a list of nodes and edges (Cypher does not accept HashSet)
      */
-    private CSOutput CS(List<Long> ids, List<String> ignoredTypes, long lengthLimit, long direction,
+    private CSOutput CS(List<String> elementIds, List<String> ignoredTypes, long lengthLimit, long direction,
             TimeChecker timeChecker) throws Exception {
 
-        HashSet<Long> resultNodes = new HashSet<>();
+        HashSet<String> resultNodes = new HashSet<>();
 
-        HashSet<Long> candidates = new HashSet<>();
-        HashMap<Long, Integer> node2Reached = new HashMap<>();
+        HashSet<String> candidates = new HashSet<>();
+        HashMap<String, Integer> node2Reached = new HashMap<>();
         Direction d = this.num2Dir(direction);
-        for (long id : ids) {
-            candidates.addAll(this.CS_BFS(node2Reached, id, ignoredTypes, lengthLimit, d));
+        for (String elementId : elementIds) {
+            candidates.addAll(this.CS_BFS(node2Reached, elementId, ignoredTypes, lengthLimit, d));
         }
-        int size = ids.size();
-        for (long id : candidates) {
-            Integer i = node2Reached.get(id);
+        int size = elementIds.size();
+        for (String elementId : candidates) {
+            Integer i = node2Reached.get(elementId);
             if (i != null && i == size) {
-                resultNodes.add(id);
+                resultNodes.add(elementId);
             }
         }
 
-        HashMap<Long, LabelData> edgeLabels = new HashMap<>();
-        HashMap<Long, LabelData> nodeLabels = new HashMap<>();
-        HashSet<Long> s1 = new HashSet<>(ids);
+        HashMap<String, LabelData> edgeLabels = new HashMap<>();
+        HashMap<String, LabelData> nodeLabels = new HashMap<>();
+        HashSet<String> s1 = new HashSet<>(elementIds);
 
-        for (Long id : s1) {
-            nodeLabels.put(id, new LabelData(0, lengthLimit + 1));
+        for (String elementId : s1) {
+            nodeLabels.put(elementId, new LabelData(0, lengthLimit + 1));
         }
-        for (Long id : resultNodes) {
-            nodeLabels.put(id, new LabelData(lengthLimit + 1, 0));
+        for (String elementId : resultNodes) {
+            nodeLabels.put(elementId, new LabelData(lengthLimit + 1, 0));
         }
 
-        HashSet<Long> unignorable = new HashSet<>(resultNodes);
+        HashSet<String> unignorable = new HashSet<>(resultNodes);
         unignorable.addAll(s1);
 
         BFSOutput o1, o2;
@@ -664,11 +651,11 @@ public class AdvancedQuery {
                         timeChecker, unignorable);
             }
         } else if (d == Direction.INCOMING) { // means common regulator
-            for (Long id : s1) {
-                nodeLabels.put(id, new LabelData(lengthLimit + 1, 0));
+            for (String elementId : s1) {
+                nodeLabels.put(elementId, new LabelData(lengthLimit + 1, 0));
             }
-            for (Long id : resultNodes) {
-                nodeLabels.put(id, new LabelData(0, lengthLimit + 1));
+            for (String elementId : resultNodes) {
+                nodeLabels.put(elementId, new LabelData(0, lengthLimit + 1));
             }
             if (s1.size() < resultNodes.size()) {
                 o1 = GoI_BFS(nodeLabels, edgeLabels, s1, ignoredTypes, lengthLimit, Direction.INCOMING, true, false,
@@ -700,18 +687,18 @@ public class AdvancedQuery {
         o1.nodes.addAll(o2.nodes);
 
         BFSOutput r = new BFSOutput(new HashSet<>(), new HashSet<>());
-        for (long edgeId : o1.edges) {
-            if (edgeLabels.get(edgeId).fwd + edgeLabels.get(edgeId).rev <= lengthLimit) {
-                r.edges.add(edgeId);
+        for (String edgeElementId : o1.edges) {
+            if (edgeLabels.get(edgeElementId).fwd + edgeLabels.get(edgeElementId).rev <= lengthLimit) {
+                r.edges.add(edgeElementId);
             }
         }
 
-        for (long nodeId : o1.nodes) {
-            if (nodeLabels.get(nodeId).fwd + nodeLabels.get(nodeId).rev <= lengthLimit) {
-                r.nodes.add(nodeId);
+        for (String nodeElementId : o1.nodes) {
+            if (nodeLabels.get(nodeElementId).fwd + nodeLabels.get(nodeElementId).rev <= lengthLimit) {
+                r.nodes.add(nodeElementId);
             }
         }
-        r.nodes.addAll(ids);
+        r.nodes.addAll(elementIds);
         r.nodes.addAll(resultNodes);
         r = this.removeOrphanEdges(r);
         s1.addAll(resultNodes);
@@ -729,13 +716,13 @@ public class AdvancedQuery {
      * @param dir          direction of BFS
      * @return HashSet<Long>
      */
-    private HashSet<Long> CS_BFS(HashMap<Long, Integer> node2Reached, long nodeId, List<String> ignoredTypes,
+    private HashSet<String> CS_BFS(HashMap<String, Integer> node2Reached, String nodeElementId, List<String> ignoredTypes,
             long depthLimit, Direction dir) {
-        HashSet<Long> visitedNodes = new HashSet<>();
-        visitedNodes.add(nodeId);
+        HashSet<String> visitedNodes = new HashSet<>();
+        visitedNodes.add(nodeElementId);
 
-        Queue<Long> queue = new LinkedList<>();
-        queue.add(nodeId);
+        Queue<String> queue = new LinkedList<>();
+        queue.add(nodeElementId);
 
         RelationshipType[] allowedEdgeTypesArr = getValidRelationshipTypes(ignoredTypes);
         HashSet<String> ignoredTypesSet = new HashSet<>(ignoredTypes);
@@ -753,30 +740,30 @@ public class AdvancedQuery {
                 break;
             }
 
-            Node curr = getNodeById(queue.remove());
+            Node curr = getNodeByElementId(queue.remove());
             queueSizeBeforeMe--;
 
             Iterable<Relationship> edges = curr.getRelationships(dir, allowedEdgeTypesArr);
             for (Relationship e : edges) {
                 Node n = e.getOtherNode(curr);
-                long id = n.getId();
+                String elementId = n.getElementId();
 
-                if ((id != nodeId && this.isNodeIgnored(n, ignoredTypesSet)) || visitedNodes.contains(id)) {
+                if ((elementId != nodeElementId && this.isNodeIgnored(n, ignoredTypesSet)) || visitedNodes.contains(elementId)) {
                     continue;
                 }
 
-                Integer cnt = node2Reached.get(id);
+                Integer cnt = node2Reached.get(elementId);
                 if (cnt == null) {
                     cnt = 0;
                 }
-                node2Reached.put(id, cnt + 1);
-                visitedNodes.add(id);
+                node2Reached.put(elementId, cnt + 1);
+                visitedNodes.add(elementId);
                 if (isPendingDepthIncrease) {
                     queueSizeBeforeMe = queue.size();
                     isPendingDepthIncrease = false;
                 }
 
-                queue.add(id);
+                queue.add(elementId);
             }
         }
         return visitedNodes;
@@ -843,22 +830,22 @@ public class AdvancedQuery {
      *
      * @param nodeLabels   labels for nodes, should be persist to next calls
      * @param edgeLabels   labels for edges, should be persist to next calls
-     * @param ids          initial nodes for search
+     * @param elementIds   initial nodes for search
      * @param ignoredTypes node or edge types to be ignored
-     * @param lengthLimit  maximum length of a path between "ids"
+     * @param lengthLimit  maximum length of a path between "elementIds"
      * @param dir          direction
      * @param isDirected   is directed?
      * @return graph elements visited
      */
-    private BFSOutput GoI_BFS(HashMap<Long, LabelData> nodeLabels, HashMap<Long, LabelData> edgeLabels,
-            HashSet<Long> ids, List<String> ignoredTypes, long lengthLimit, Direction dir, boolean isDirected,
-            boolean isFollowLabeled, TimeChecker timeChecker, HashSet<Long> unignorable) throws Exception {
-        HashSet<Long> nodeSet = new HashSet<>();
-        HashSet<Long> edgeSet = new HashSet<>();
-        HashSet<Long> visitedEdges = new HashSet<>();
+    private BFSOutput GoI_BFS(HashMap<String, LabelData> nodeLabels, HashMap<String, LabelData> edgeLabels,
+            HashSet<String> elementIds, List<String> ignoredTypes, long lengthLimit, Direction dir, boolean isDirected,
+            boolean isFollowLabeled, TimeChecker timeChecker, HashSet<String> unignorable) throws Exception {
+        HashSet<String> nodeSet = new HashSet<>();
+        HashSet<String> edgeSet = new HashSet<>();
+        HashSet<String> visitedEdges = new HashSet<>();
 
         // prepare queue
-        Queue<Long> queue = new LinkedList<>(ids);
+        Queue<String> queue = new LinkedList<>(elementIds);
 
         RelationshipType[] allowedEdgeTypesArr = getValidRelationshipTypes(ignoredTypes);
         HashSet<String> ignoredTypesSet = new HashSet<>(ignoredTypes);
@@ -868,16 +855,16 @@ public class AdvancedQuery {
         }
 
         while (!queue.isEmpty()) {
-            long n1 = queue.remove();
+            String n1 = queue.remove();
 
-            Iterable<Relationship> edges = getNodeById(n1).getRelationships(d, allowedEdgeTypesArr);
+            Iterable<Relationship> edges = getNodeByElementId(n1).getRelationships(d, allowedEdgeTypesArr);
             timeChecker.checkTime();
             for (Relationship e : edges) {
-                long edgeId = e.getId();
-                Node n2 = e.getOtherNode(getNodeById(n1));
-                long n2Id = n2.getId();
+                java.lang.String edgeId = e.getElementId();
+                Node n2 = e.getOtherNode(getNodeByElementId(n1));
+                String n2ElementId = n2.getElementId();
                 LabelData labelE = edgeLabels.get(edgeId);
-                boolean isIgnore = !ids.contains(n2Id) && !unignorable.contains(n2Id)
+                boolean isIgnore = !elementIds.contains(n2ElementId) && !unignorable.contains(n2ElementId)
                         && this.isNodeIgnored(n2, ignoredTypesSet);
                 if (isIgnore || visitedEdges.contains(edgeId) ||
                         (isFollowLabeled && labelE == null)) {
@@ -900,20 +887,20 @@ public class AdvancedQuery {
                 edgeLabels.put(edgeId, labelE);
                 nodeLabels.put(n1, labelN1);
 
-                nodeSet.add(n2Id);
+                nodeSet.add(n2ElementId);
                 edgeSet.add(edgeId);
-                LabelData labelN2 = nodeLabels.get(n2Id);
+                LabelData labelN2 = nodeLabels.get(n2ElementId);
                 if (labelN2 == null) {
                     labelN2 = new LabelData(lengthLimit + 1);
                 }
 
                 if (labelN2.getLabel(dir) > labelN1.getLabel(dir) + 1) {
                     labelN2.setLabel(labelN1.getLabel(dir) + 1, dir);
-                    if (labelN2.getLabel(dir) < lengthLimit && !ids.contains(n2Id)) {
-                        queue.add(n2Id);
+                    if (labelN2.getLabel(dir) < lengthLimit && !elementIds.contains(n2ElementId)) {
+                        queue.add(n2ElementId);
                     }
                 }
-                nodeLabels.put(n2Id, labelN2);
+                nodeLabels.put(n2ElementId, labelN2);
                 timeChecker.checkTime();
             }
         }
@@ -939,48 +926,48 @@ public class AdvancedQuery {
      * graph where each node is
      * at least degree-2 or inside the list of srcIds
      *
-     * @param srcIds   ids of nodes which are sources
+     * @param srcElementIds   element ids of nodes which are sources
      * @param subGraph current sub-graph which will be modified
      */
-    private void purify(HashSet<Long> srcIds, BFSOutput subGraph) {
-        HashMap<Long, HashSet<Long>> node2edge = new HashMap<>();
-        HashMap<Long, HashSet<Long>> node2node = new HashMap<>();
-        subGraph.nodes.addAll(srcIds);
-        for (long edgeId : subGraph.edges) {
-            Relationship r = getRelationshipById(edgeId);
-            long id1 = r.getStartNode().getId();
-            long id2 = r.getEndNode().getId();
-            this.insert2AdjList(node2edge, id1, edgeId);
-            this.insert2AdjList(node2edge, id2, edgeId);
+    private void purify(HashSet<String> srcElementIds, BFSOutput subGraph) {
+        HashMap<String, HashSet<String>> node2edge = new HashMap<>();
+        HashMap<String, HashSet<String>> node2node = new HashMap<>();
+        subGraph.nodes.addAll(srcElementIds);
+        for (String edgeElementId : subGraph.edges) {
+            Relationship r = getRelationshipByElementId(edgeElementId);
+            String elementId1 = r.getStartNode().getElementId();
+            String elementId2 = r.getEndNode().getElementId();
+            this.insert2AdjList(node2edge, elementId1, edgeElementId);
+            this.insert2AdjList(node2edge, elementId2, edgeElementId);
             // do not consider self-loops
-            if (id1 != id2) {
-                this.insert2AdjList(node2node, id1, id2);
-                this.insert2AdjList(node2node, id2, id1);
+            if (elementId1 != elementId2) {
+                this.insert2AdjList(node2node, elementId1, elementId2);
+                this.insert2AdjList(node2node, elementId2, elementId1);
             }
         }
 
-        HashSet<Long> degree1Nodes = this.getOrphanNodes(node2node, srcIds);
+        HashSet<String> degree1Nodes = this.getOrphanNodes(node2node, srcElementIds);
 
         while (degree1Nodes.size() > 0) {
-            for (long nodeId : degree1Nodes) {
-                subGraph.nodes.remove(nodeId);
-                subGraph.edges.removeAll(node2edge.get(nodeId));
+            for (String nodeElementId : degree1Nodes) {
+                subGraph.nodes.remove(nodeElementId);
+                subGraph.edges.removeAll(node2edge.get(nodeElementId));
 
                 // decrement the degree of the other node (node on the other hand of currently
                 // deleted orphan node)
-                HashSet<Long> otherNodeIds = node2node.get(nodeId);
-                for (long id : otherNodeIds) {
-                    node2node.get(id).remove(nodeId);
+                HashSet<String> otherNodeIds = node2node.get(nodeElementId);
+                for (String elementId : otherNodeIds) {
+                    node2node.get(elementId).remove(nodeElementId);
                 }
-                node2node.remove(nodeId);
+                node2node.remove(nodeElementId);
             }
 
-            degree1Nodes = this.getOrphanNodes(node2node, srcIds);
+            degree1Nodes = this.getOrphanNodes(node2node, srcElementIds);
         }
     }
 
-    private void insert2AdjList(HashMap<Long, HashSet<Long>> map, long key, long val) {
-        HashSet<Long> set = map.get(key);
+    private void insert2AdjList(HashMap<String, HashSet<String>> map, String key, String val) {
+        HashSet<String> set = map.get(key);
         if (set == null) {
             set = new HashSet<>();
         }
@@ -997,20 +984,20 @@ public class AdvancedQuery {
     private BFSOutput removeOrphanEdges(BFSOutput elms) {
         BFSOutput result = new BFSOutput(elms.nodes, new HashSet<>());
 
-        for (long edgeId : elms.edges) {
-            Relationship r = getRelationshipById(edgeId);
-            long s = r.getStartNode().getId();
-            Long e = r.getEndNode().getId();
+        for (String edgeElementId : elms.edges) {
+            Relationship r = getRelationshipByElementId(edgeElementId);
+            String s = r.getStartNode().getElementId();
+            String e = r.getEndNode().getElementId();
             if (elms.nodes.contains(s) && elms.nodes.contains(e)) {
-                result.edges.add(edgeId);
+                result.edges.add(edgeElementId);
             }
         }
         return result;
     }
 
-    private HashSet<Long> getOrphanNodes(HashMap<Long, HashSet<Long>> node2node, HashSet<Long> srcIds) {
-        HashSet<Long> orphanNodes = new HashSet<>();
-        for (Long k : node2node.keySet()) {
+    private HashSet<String> getOrphanNodes(HashMap<String, HashSet<String>> node2node, HashSet<String> srcIds) {
+        HashSet<String> orphanNodes = new HashSet<>();
+        for (String k : node2node.keySet()) {
             if (!srcIds.contains(k) && node2node.get(k).size() == 1) {
                 orphanNodes.add(k);
             }
@@ -1028,65 +1015,65 @@ public class AdvancedQuery {
         public List<Node> nodes;
         public long totalNodeCount;
         public List<String> nodeClass;
-        public List<Long> nodeId;
+        public List<String> nodeElementId;
 
         public List<Relationship> edges;
         public List<String> edgeClass;
-        public List<Long> edgeId;
-        public List<List<Long>> edgeSourceTargets;
+        public List<String> edgeElementId;
+        public List<List<String>> edgeSourceTargets;
 
         Output() {
             this.nodes = new ArrayList<>();
             this.edges = new ArrayList<>();
             this.nodeClass = new ArrayList<>();
             this.edgeClass = new ArrayList<>();
-            this.nodeId = new ArrayList<>();
-            this.edgeId = new ArrayList<>();
+            this.nodeElementId = new ArrayList<>();
+            this.edgeElementId = new ArrayList<>();
             this.edgeSourceTargets = new ArrayList<>();
         }
     }
 
     public static class CommonStreamOutput {
-        public List<Long> targetRegulatorNodeIds;
+        public List<String> targetRegulatorNodeElementIds;
         public List<Node> nodes;
         public long totalNodeCount;
         public List<String> nodeClass;
-        public List<Long> nodeId;
+        public List<String> nodeElementId;
 
         public List<Relationship> edges;
         public List<String> edgeClass;
-        public List<Long> edgeId;
-        public List<List<Long>> edgeSourceTargets;
+        public List<String> edgeElementId;
+        public List<List<String>> edgeSourceTargets;
 
-        CommonStreamOutput(Output o, List<Long> targetRegulatorNodeIds) {
+        CommonStreamOutput(Output o, List<String> targetRegulatorNodeElementIds) {
             this.nodes = o.nodes;
             this.edges = o.edges;
             this.nodeClass = o.nodeClass;
             this.edgeClass = o.edgeClass;
-            this.nodeId = o.nodeId;
-            this.edgeId = o.edgeId;
+            this.nodeElementId = o.nodeElementId;
+            this.edgeElementId = o.edgeElementId;
             this.totalNodeCount = o.totalNodeCount;
             this.edgeSourceTargets = o.edgeSourceTargets;
-            this.targetRegulatorNodeIds = targetRegulatorNodeIds;
+            this.targetRegulatorNodeElementIds = targetRegulatorNodeElementIds;
         }
     }
 
     public static class BFSOutput {
-        public HashSet<Long> nodes;
-        public HashSet<Long> edges;
+        public HashSet<String> nodes;
+        public HashSet<String> edges;
 
-        BFSOutput(HashSet<Long> nodes, HashSet<Long> edges) {
+        BFSOutput(HashSet<String> nodes, HashSet<String> edges) {
             this.nodes = nodes;
             this.edges = edges;
         }
     }
 
     public static class CSOutput {
-        public HashSet<Long> nodes;
-        public HashSet<Long> edges;
-        public HashSet<Long> targetRegulatorNodes;
+        public HashSet<String> nodes;
+        public HashSet<String> edges;
+        public HashSet<String> targetRegulatorNodes;
 
-        CSOutput(HashSet<Long> nodes, HashSet<Long> edges, HashSet<Long> targetRegulatorNodes) {
+        CSOutput(HashSet<String> nodes, HashSet<String> edges, HashSet<String> targetRegulatorNodes) {
             this.nodes = nodes;
             this.edges = edges;
             this.targetRegulatorNodes = targetRegulatorNodes;
