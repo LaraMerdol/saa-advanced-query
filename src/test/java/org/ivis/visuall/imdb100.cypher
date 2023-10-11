@@ -63,8 +63,8 @@ CREATE (:Title:`UNIQUE IMPORT LABEL` {count_votes:12, genres:["Horror", "Short"]
 CREATE (:Title:`UNIQUE IMPORT LABEL` {count_votes:70, genres:["Short", "Sport"], is_adult:0, original_title:"Casey at the Bat", primary_title:"Casey at the Bat", production_end_date:-2209075200000, production_start_date:-2232748800000, rating:4.6, runtime_minutes:1, shooting_end_date:-2209075200000, shooting_start_date:-2232748800000, start_year:1899, tconst:"tt0000229", title_type:"short", `UNIQUE IMPORT ID`:1038134});
 CREATE (:Title:`UNIQUE IMPORT LABEL` {count_votes:46, genres:["Documentary", "Short"], is_adult:0, original_title:"Distributing a War Extra", primary_title:"Distributing a War Extra", production_end_date:-2209075200000, production_start_date:-2230156800000, rating:4.4, runtime_minutes:1, shooting_end_date:-2209075200000, shooting_start_date:-2230156800000, start_year:1899, tconst:"tt0000240", title_type:"short", `UNIQUE IMPORT ID`:1038135});
 CREATE (:Title:`UNIQUE IMPORT LABEL` {count_votes:386, genres:["Drama", "Short"], is_adult:0, original_title:"King John", primary_title:"King John", production_end_date:-2217888000000, production_start_date:-2219529600000, rating:5, runtime_minutes:5, shooting_end_date:-2218060800000, shooting_start_date:-2218060800000, start_year:1899, tconst:"tt0000247", title_type:"short", `UNIQUE IMPORT ID`:1038136});
-CREATE CONSTRAINT ON (node:Person) ASSERT (node.nconst) IS UNIQUE;
-CREATE CONSTRAINT ON (node:`UNIQUE IMPORT LABEL`) ASSERT (node.`UNIQUE IMPORT ID`) IS UNIQUE;
+CREATE CONSTRAINT  constraint_1 FOR (node:Person) REQUIRE (node.nconst) IS UNIQUE;
+CREATE CONSTRAINT constraint_2 FOR (node:`UNIQUE IMPORT LABEL`) REQUIRE (node.`UNIQUE IMPORT ID`) IS UNIQUE;
 MATCH (n1:Person{nconst:"nm0010291"}), (n2:`UNIQUE IMPORT LABEL`{`UNIQUE IMPORT ID`:1038109}) CREATE (n1)-[r:KNOWN_FOR {begin:-2353968000000, end:-2335305600000}]->(n2);
 MATCH (n1:Person{nconst:"nm0010291"}), (n2:`UNIQUE IMPORT LABEL`{`UNIQUE IMPORT ID`:1038111}) CREATE (n1)-[r:KNOWN_FOR {begin:-2359152000000, end:-2335305600000}]->(n2);
 MATCH (n1:Person{nconst:"nm0010291"}), (n2:`UNIQUE IMPORT LABEL`{`UNIQUE IMPORT ID`:1038110}) CREATE (n1)-[r:KNOWN_FOR {begin:-2353708800000, end:-2348524800000}]->(n2);
@@ -166,4 +166,5 @@ MATCH (n1:Person{nconst:"nm0595213"}), (n2:`UNIQUE IMPORT LABEL`{`UNIQUE IMPORT 
 MATCH (n1:Person{nconst:"nm6114857"}), (n2:`UNIQUE IMPORT LABEL`{`UNIQUE IMPORT ID`:1038136}) CREATE (n1)-[r:COMPOSER {begin:-2219529600000, characters:[], end:-2217888000000, job:""}]->(n2);
 MATCH (n1:Person{nconst:"nm6010696"}), (n2:`UNIQUE IMPORT LABEL`{`UNIQUE IMPORT ID`:1038136}) CREATE (n1)-[r:PRODUCTION_DESIGNER {begin:-2219529600000, characters:[], end:-2217888000000, job:""}]->(n2);
 MATCH (n:`UNIQUE IMPORT LABEL`)  WITH n LIMIT 20000 REMOVE n:`UNIQUE IMPORT LABEL` REMOVE n.`UNIQUE IMPORT ID`;
-DROP CONSTRAINT ON (node:`UNIQUE IMPORT LABEL`) ASSERT (node.`UNIQUE IMPORT ID`) IS UNIQUE;
+DROP CONSTRAINT constraint_1;
+DROP CONSTRAINT constraint_2;
