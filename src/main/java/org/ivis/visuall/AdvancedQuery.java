@@ -226,6 +226,115 @@ public class AdvancedQuery {
     public Stream<Output> error() {
         throw new RuntimeException("Error testing 123");
     }
+    /**
+     * finds the minimal sub-graph from given nodes
+     *
+     * @param elementIds     node elementIds to find the minimal connected graph
+     * @param ignoredTypes   node or edge types to be ignored
+     * @param terminalNodes  terminal nodes that are requested
+     * @param weightProperty label of the weight property
+     * @param lengthLimit    maximum length of a path between start node and
+     *                       terminal nodes
+     * @param nodeLimit      maximum number of terminal nodes
+     * @param isDirected     is direction important?
+     * @param pageSize       return at maximum this number of nodes, always returns
+     *                       "ids"
+     * @param currPage       which page do yoy want to return
+     * @param filterTxt      filter results by text
+     * @param isIgnoreCase   should ignore case in text filtering?
+     * @param orderBy        order elements by a property
+     * @param orderDir       order direction
+     * @return terminal nodes and relative paths
+     */
+    @Procedure(value = "findNodesWithMostPathBetweenGraph", mode = Mode.WRITE)
+    @Description("Find nodes that has more path with given start node")
+    public Stream<Output> findNodesWithMostPathBetweenGraph(@Name("elementIds") List<String> elementIds,
+            @Name("ignoredTypes") List<String> ignoredTypes, @Name("terminalType") List<String> terminalNodes,
+            @Name("weightProperty") String weightProperty,
+            @Name("lengthLimit") long lengthLimit, @Name("nodeLimit") long nodeLimit,
+            @Name("isDirected") boolean isDirected,
+            @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt,
+            @Name("isIgnoreCase") boolean isIgnoreCase,
+            @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
+            @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
+            @Name("endTime") long endTime, @Name("inclusionType") long inclusionType,
+            @Name("timeout") long timeout, @Name("idFilter") List<String> idFilter) throws Exception {
+
+        long executionStarted = System.nanoTime();
+        TimeChecker timeChecker = new TimeChecker(timeout);
+        BFSOutput o1 = findNodesWithMostPathBetweenDFS(elementIds, weightProperty, lengthLimit, nodeLimit,
+                    terminalNodes, ignoredTypes,
+                    timeChecker, startTime, endTime, timeMapping, inclusionType).graphOutput;
+        this.endMeasuringTime("Find Nodes With More Pathst", executionStarted);
+        executionStarted = System.nanoTime();
+        o1 = this.filterByDate(o1, startTime, endTime, timeMapping, inclusionType);
+        this.endMeasuringTime("Filter by date", executionStarted);
+        executionStarted = System.nanoTime();
+        int cntSrcNode = 1;
+        int cntSkip = Math.max(0, (int) ((currPage - 1) * pageSize) - cntSrcNode);
+        long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
+        Output o2;
+        if (idFilter == null) {
+            o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy,
+                    orderDir);
+            o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
+        } else {
+            o2 = this.idFiltering(o1, idFilter);
+        }
+
+        this.endMeasuringTime("Filter by date", executionStarted);
+        if (numSrcNode2return > 0) {
+            int fromIdx = Math.max(0, (int) ((currPage - 1) * pageSize));
+            int toIdx = Math.min(cntSrcNode, (int) (currPage * pageSize));
+            this.addSourceNodes(o2, elementIds.subList(fromIdx, toIdx));
+        }
+        return Stream.of(o2);
+    }
+
+    /**
+     * finds the minimal sub-graph from given nodes
+     *
+     * @param elementIds     node elementIds to find the minimal connected graph
+     * @param ignoredTypes   node or edge types to be ignored
+     * @param terminalNodes  terminal nodes that are requested
+     * @param weightProperty label of the weight property
+     * @param lengthLimit    maximum length of a path between start node and
+     *                       terminal nodes
+     * @param nodeLimit      maximum number of terminal nodes
+     * @param isDirected     is direction important?
+     * @param pageSize       return at maximum this number of nodes, always returns
+     *                       "ids"
+     * @param currPage       which page do yoy want to return
+     * @param filterTxt      filter results by text
+     * @param isIgnoreCase   should ignore case in text filtering?
+     * @param orderBy        order elements by a property
+     * @param orderDir       order direction
+     * @return terminal nodes and scores
+     */
+    @Procedure(value = "findNodesWithMostPathBetweenTable", mode = Mode.WRITE)
+    @Description("Find nodes that has more path with given start node")
+    public Stream<ScoreOutput> findNodesWithMostPathBetweenTable(@Name("elementIds") List<String> elementIds,
+            @Name("ignoredTypes") List<String> ignoredTypes, @Name("terminalNodes") List<String> terminalNodes,
+            @Name("weightProperty") String weightProperty,
+            @Name("lengthLimit") long lengthLimit, @Name("nodeLimit") long nodeLimit,
+            @Name("isDirected") boolean isDirected,
+            @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt,
+            @Name("isIgnoreCase") boolean isIgnoreCase,
+            @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
+            @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
+            @Name("endTime") long endTime, @Name("inclusionType") long inclusionType,
+            @Name("timeout") long timeout, @Name("idFilter") List<String> idFilter) throws Exception {
+
+        long executionStarted = System.nanoTime();
+        TimeChecker timeChecker = new TimeChecker(timeout);
+        ScoreOutput o1 = findNodesWithMostPathBetweenDFS(elementIds, weightProperty, lengthLimit, nodeLimit,
+                    terminalNodes, ignoredTypes,
+                    timeChecker, startTime, endTime, timeMapping, inclusionType).tableOutput;
+        this.endMeasuringTime("Find Nodes With More Pathst", executionStarted);
+        executionStarted = System.nanoTime();
+        this.endMeasuringTime("Filter by date", executionStarted);
+        return Stream.of(o1);
+    }
 
     /**
      * Since result could be big, gives results page by page
@@ -481,6 +590,44 @@ public class AdvancedQuery {
         }
     }
 
+
+    private boolean checkIfInRange(long d1, long d2, long inclusionType, Entity e, List<String> propNames) {
+        if (d1 == d2 || propNames == null) {
+            return true;
+        }
+        String propStartName = propNames.get(0);
+        String propEndName = propNames.get(1);
+        boolean has1 = e.hasProperty(propStartName);
+        boolean has2 = e.hasProperty(propEndName);
+        long start = Long.MIN_VALUE;
+        long end = Long.MAX_VALUE;
+        if (has1) {
+            Object o = e.getProperty(propStartName);
+            if (o instanceof Long) {
+                start = (long) o;
+            } else if (o instanceof Double) {
+                start = ((Double) o).longValue();
+            }
+        }
+        if (has2) {
+            Object o = e.getProperty(propEndName);
+            if (o instanceof Long) {
+                end = (long) o;
+            } else if (o instanceof Double) {
+                end = ((Double) o).longValue();
+            }
+        }
+
+        if (inclusionType == 0 && start <= d2 && end >= d1) { // the range and object life-time are overlapping
+            return true;
+        } else if (inclusionType == 1 && d1 <= start && d2 >= end) { // the range contains the object life-time
+            return true;
+        } else if (inclusionType == 2 && start <= d1 && end >= d2) { // the range contained by the object life-time
+            return true;
+        } else {
+            return false;
+        }
+    }
     private void addSourceNodes(Output o, List<String> elementIds) {
         // insert source nodes
         for (String elementId : elementIds) {
@@ -975,6 +1122,137 @@ public class AdvancedQuery {
         map.put(key, set);
     }
 
+
+    /**
+     * @param id
+     * @param lengthLimit
+     * @param terminalNodeType
+     * @param ignoredTypes
+     * @param timeChecker
+     * @return
+     * @throws Exception
+     */
+    private FMPOutput findNodesWithMostPathBetweenDFS(List<String> elementIds, String weightProperty ,
+            long lengthLimit, long nodeLimit,
+            List<String> sources, List<String> ignoredTypes, TimeChecker timeChecker,
+            long startTime, long endTime,
+            Map<String, List<String>> timeMapping, long inclusionType) throws Exception {
+
+        BFSOutput resultGraph = new BFSOutput(new HashSet<String>(), new HashSet<String>());
+        ScoreOutput resultTable = new ScoreOutput(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+        Map<String, Pair<List<List<String>>, List<Double>, List<List<String>>>> pathsAndScores = calculatePaths(sources,
+                elementIds,
+                lengthLimit, ignoredTypes, weightProperty, startTime, endTime, inclusionType, timeMapping);
+        List<Pair2<String, Double>> resultTableInitial = new ArrayList<>();
+        List<Pair2<String, Double>> sortedSources = new ArrayList<>();
+
+        for (String source : sources) {
+            pathsAndScores.get(source);
+            List<List<String>> allPaths = pathsAndScores.get(source).first;
+            List<Double> allScores = pathsAndScores.get(source).second;
+            Map<String, Double> sourceScores = new HashMap<>();
+            for (int i = 0; i < allPaths.size(); i++) {
+                sourceScores.put(source, sourceScores.getOrDefault(source, 0.0) + allScores.get(i));
+            }
+            for (Map.Entry<String, Double> entry : sourceScores.entrySet()) {
+                sortedSources.add(new Pair2<>(entry.getKey(), entry.getValue()));
+            }
+
+        }
+        sortedSources.sort((a, b) -> Double.compare(b.second, a.second));
+        resultTableInitial = sortedSources.subList(0, Math.min((int) nodeLimit, sortedSources.size()));
+        for (Pair2<String, Double> entry : resultTableInitial) {
+            for (List<String> edges : pathsAndScores.get(entry.first).third) {
+                resultGraph.edges.addAll(edges);
+            }
+            for (List<String> nodes : pathsAndScores.get(entry.first).first) {
+                resultGraph.nodes.addAll(nodes);
+            }
+        }
+
+        resultTable = convertToScoreOutput(resultTableInitial);
+        FMPOutput result = new FMPOutput(resultTable, resultGraph);
+        return result;
+    }
+
+    public void dfs(String source, List<String> sinks, List<String> currentPath, List<String> currentEdges,
+            double currentScore, int currentLength,
+            long maxPathLength, List<List<String>> paths, List<List<String>> edges, List<Double> scores,
+            List<String> ignoredTypes,
+            String weightProperty, long startTime, long endTime, long inclusionType,
+            Map<String, List<String>> timeMapping) {
+        RelationshipType[] allowedEdgeTypesArr = getValidRelationshipTypes(ignoredTypes);
+        Node curr = this.getNodeByElementId(source);
+        if (sinks.contains(source)) {
+            paths.add(new ArrayList<>(currentPath));
+            edges.add(new ArrayList<>(currentEdges));
+            scores.add(currentScore / currentLength);
+        }
+
+        if (currentPath.size() <= maxPathLength) {
+            for (Relationship e : curr.getRelationships(Direction.BOTH, allowedEdgeTypesArr)) {
+                Node neighbor = e.getOtherNode(curr);
+                boolean edgeValid = this.checkIfInRange(startTime, endTime, inclusionType, e,
+                        timeMapping.get(e.getType().name()));
+                boolean nodeValid = this.checkIfInRange(startTime, endTime, inclusionType, neighbor,
+                        timeMapping.get(neighbor.getLabels().iterator().next().name()));
+                if (!currentPath.contains(neighbor.getElementId()) && edgeValid && nodeValid) {
+                    currentPath.add(neighbor.getElementId());
+                    currentEdges.add(e.getElementId());
+                    dfs(neighbor.getElementId(), sinks, currentPath, currentEdges,
+                            currentScore * (double) e.getProperty(weightProperty,
+                                    (currentLength != 0) ? Math.pow(currentScore, 1.0 / currentLength) : 1.0),
+                            currentLength + 1, maxPathLength, paths, edges, scores, ignoredTypes, weightProperty,
+                            startTime, endTime, inclusionType, timeMapping);
+                    currentPath.remove(currentPath.size() - 1);
+                    currentEdges.remove(currentEdges.size() - 1);
+
+                }
+            }
+        }
+    }
+
+    public Map<String, Pair<List<List<String>>, List<Double>, List<List<String>>>> calculatePaths(List<String> sources,
+            List<String> sinks,
+            long maxPathLength, List<String> ignoredTypes, String weightProperty,
+            long startTime, long endTime, long inclusionType, Map<String, List<String>> timeMapping) {
+        Map<String, Pair<List<List<String>>, List<Double>, List<List<String>>>> allPathsAndScores = new HashMap<>();
+
+        for (String source : sources) {
+            List<List<String>> allPaths = new ArrayList<>();
+            List<List<String>> allPathEdges = new ArrayList<>();
+            List<Double> allScores = new ArrayList<>();
+            dfs(source, sinks, new ArrayList<>(List.of(source)), new ArrayList<String>(), 1, 0, maxPathLength, allPaths,
+                    allPathEdges, allScores, ignoredTypes,
+                    weightProperty, startTime, endTime, inclusionType, timeMapping);
+            allPathsAndScores.put(source, new Pair<>(allPaths, allScores, allPathEdges));
+        }
+
+        return allPathsAndScores;
+    }
+
+    private static class Pair<T1, T2, T3> {
+        public T1 first;
+        public T2 second;
+        public T3 third;
+
+        public Pair(T1 first, T2 second, T3 third) {
+            this.first = first;
+            this.second = second;
+            this.third = third;
+        }
+    }
+
+    private static class Pair2<T1, T2> {
+        public T1 first;
+        public T2 second;
+
+        public Pair2(T1 first, T2 second) {
+            this.first = first;
+            this.second = second;
+        }
+    }
+
     /**
      * remove edges that does not have source or target
      *
@@ -1078,6 +1356,40 @@ public class AdvancedQuery {
             this.edges = edges;
             this.targetRegulatorNodes = targetRegulatorNodes;
         }
+    }
+    public static class ScoreOutput {
+        public List<String> elementId;
+        public List<String> name;
+        public List<Double> score;
+
+        ScoreOutput(List<String> elementId, List<String> name, List<Double> score) {
+            this.elementId = elementId;
+            this.name = name;
+            this.score = score;
+        }
+
+    }
+
+    public static class FMPOutput {
+        public ScoreOutput tableOutput;
+        public BFSOutput graphOutput;
+
+        FMPOutput(ScoreOutput tableOutput, BFSOutput graphOutput) {
+            this.tableOutput = tableOutput;
+            this.graphOutput = graphOutput;
+        }
+    }
+
+    public ScoreOutput convertToScoreOutput(List<Pair2<String, Double>> result) {
+        List<String> elementIdList = new ArrayList<>();
+        List<String> nameList = new ArrayList<>();
+        List<Double> scoreList = new ArrayList<>();
+        for (Pair2<String, Double> pair : result) {
+            elementIdList.add(pair.first);
+            nameList.add(this.getNodeByElementId(pair.first).getProperty("name", "").toString()); // Assuming the 'name'                                                                                 // result map
+            scoreList.add(pair.second);
+        }
+        return new ScoreOutput(elementIdList, nameList, scoreList);
     }
 
     public static class LabelData {

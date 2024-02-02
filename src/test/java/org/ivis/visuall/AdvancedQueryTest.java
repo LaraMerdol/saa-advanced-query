@@ -51,6 +51,27 @@ public class AdvancedQueryTest {
                         + "(GRB7)-[:R]->(RET), (GRB7)-[:R]->(ERBB2), (ERBB2)-[:R]->(SRC), (ERBB2)-[:R]->(MUC1), (MUC1)-[:R]->(SRC), (RAPGEP)-[:R]->(NEDD9), (PTK2)-[:R]->(NEDD9),"
                         + "(RET)-[:R]->(SRC), (SRC)-[:R]->(DAB2), (DAB2)-[:R]->(SMAD2), (SMAD2)-[:R]->(NEDD9);";
 
+        private static final String paperFig12Graph = """
+                        CREATE (f:File {name: 'File1'})
+                        CREATE (d1:Developer {name: 'Developer1'})
+                        CREATE (d2:Developer {name: 'Developer2'})
+                        CREATE         (c1:Commit {name: 'Commit1'})
+                        CREATE (c2:Commit {name: 'Commit2'})
+                        CREATE (c3:Commit {name: 'Commit3'})
+                        CREATE (f1:File {name: 'File2'})
+
+                        CREATE (d1)-[:WORKS_ON]->(f)
+                        CREATE (d1)-[:REVIEW]->(c1)
+                        CREATE (d2)-[:REVIEW]->(c1)
+                        CREATE (d2)-[:WORKS_ON]->(f1)
+                        CREATE (d2)-[:REVIEW]->(c2)
+                        CREATE (d2)-[:REVIEW]->(c3)
+                        CREATE (f)-[:MODIFIES]->(c1)
+                        CREATE (f)-[:MODIFIES]->(c2)
+                        CREATE (f)-[:MODIFIES]->(c3)
+                        CREATE (f)-[:CONTAINS]->(f1);
+                        """;
+
         @BeforeEach
         void initializeNeo4j() {
                 this.embeddedDatabaseServer = Neo4jBuilders.newInProcessBuilder().withProcedure(AdvancedQuery.class)
@@ -91,6 +112,29 @@ public class AdvancedQueryTest {
                 }
         }
 
+        @Test
+        public void FMPBT() {
+                try (Driver driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+                                Session session = driver.session()) {
+                        session.run(AdvancedQueryTest.paperFig12Graph);
+                        String file1 = session.run(
+                                        "match (n) where n.name='File1' return elementId(n)")
+                                        .single().get(0).asString();
+                        String file2 = session.run(
+                                        "match (n) where n.name='File2' return elementId(n)")
+                                        .single().get(0).asString();             
+                        String dev1 = session.run(
+                                        "match (n) where n.name='Developer1' return elementId(n)")
+                                        .single().get(0).asString();  
+                        String dev2 = session.run(
+                                        "match (n) where n.name='Developer2' return elementId(n)")
+                                        .single().get(0).asString();                                                                                                            
+                        String query = "CALL findNodesWithMostPathBetweenTable(["+"'" +file1+"' , "+"'" +file2+"'" +"], [],["+"'" +dev1+"' , "+"'" +dev2+"'" +"],'',3,3, false,\n" + //
+                                        "      225, 1, null, false, 'score', 0, {}, 0, 0, 0, 10000, null)";
+                        Result result = session.run(query);
+                        Record r = result.single();                                         
+                }
+        }
         @Test
         public void GoIForLength2() {
 
