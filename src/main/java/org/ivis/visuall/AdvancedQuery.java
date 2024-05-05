@@ -226,6 +226,7 @@ public class AdvancedQuery {
     public Stream<Output> error() {
         throw new RuntimeException("Error testing 123");
     }
+
     /**
      * finds the minimal sub-graph from given nodes
      *
@@ -246,9 +247,9 @@ public class AdvancedQuery {
      * @param orderDir       order direction
      * @return terminal nodes and relative paths
      */
-    @Procedure(value = "findNodesWithMostPathBetweenGraph", mode = Mode.WRITE)
+    @Procedure(value = "findNodesWithMostPathBetween", mode = Mode.WRITE)
     @Description("Find nodes that has more path with given start node")
-    public Stream<Output> findNodesWithMostPathBetweenGraph(@Name("elementIds") List<String> elementIds,
+    public Stream<Output> findNodesWithMostPathBetween(@Name("elementIds") List<String> elementIds,
             @Name("ignoredTypes") List<String> ignoredTypes, @Name("terminalType") List<String> terminalNodes,
             @Name("weightProperty") String weightProperty,
             @Name("lengthLimit") long lengthLimit, @Name("nodeLimit") long nodeLimit,
@@ -262,12 +263,13 @@ public class AdvancedQuery {
 
         long executionStarted = System.nanoTime();
         TimeChecker timeChecker = new TimeChecker(timeout);
-        BFSOutput o1 = findNodesWithMostPathBetweenDFS(elementIds, weightProperty, lengthLimit, nodeLimit,
+        FMPOutput o1 = findNodesWithMostPathBetweenDFS(elementIds, weightProperty, lengthLimit, nodeLimit,
                     terminalNodes, ignoredTypes,
-                    timeChecker, startTime, endTime, timeMapping, inclusionType).graphOutput;
+                    timeChecker, startTime, endTime, timeMapping, inclusionType);
+        BFSOutput o1Graph = new BFSOutput(o1.nodes, o1.edges);
         this.endMeasuringTime("Find Nodes With More Pathst", executionStarted);
         executionStarted = System.nanoTime();
-        o1 = this.filterByDate(o1, startTime, endTime, timeMapping, inclusionType);
+        o1Graph = this.filterByDate(o1Graph, startTime, endTime, timeMapping, inclusionType);
         this.endMeasuringTime("Filter by date", executionStarted);
         executionStarted = System.nanoTime();
         int cntSrcNode = 1;
@@ -275,11 +277,11 @@ public class AdvancedQuery {
         long numSrcNode2return = Math.min(pageSize, Math.max(0, cntSrcNode - (currPage - 1) * pageSize));
         Output o2;
         if (idFilter == null) {
-            o2 = this.tableFiltering(o1, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy,
+            o2 = this.tableFiltering(o1Graph, pageSize - numSrcNode2return, cntSkip, filterTxt, isIgnoreCase, orderBy,
                     orderDir);
-            o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
+                    o2.totalNodeCount += cntSrcNode; // total node count should also include the source nodes
         } else {
-            o2 = this.idFiltering(o1, idFilter);
+            o2 = this.idFiltering(o1Graph, idFilter);
         }
 
         this.endMeasuringTime("Filter by date", executionStarted);
@@ -288,53 +290,12 @@ public class AdvancedQuery {
             int toIdx = Math.min(cntSrcNode, (int) (currPage * pageSize));
             this.addSourceNodes(o2, elementIds.subList(fromIdx, toIdx));
         }
+        o2.elementId = o1.elementId;
+        o2.name = o1.name;
+        o2.score = o1.score;
         return Stream.of(o2);
     }
-
-    /**
-     * finds the minimal sub-graph from given nodes
-     *
-     * @param elementIds     node elementIds to find the minimal connected graph
-     * @param ignoredTypes   node or edge types to be ignored
-     * @param terminalNodes  terminal nodes that are requested
-     * @param weightProperty label of the weight property
-     * @param lengthLimit    maximum length of a path between start node and
-     *                       terminal nodes
-     * @param nodeLimit      maximum number of terminal nodes
-     * @param isDirected     is direction important?
-     * @param pageSize       return at maximum this number of nodes, always returns
-     *                       "ids"
-     * @param currPage       which page do yoy want to return
-     * @param filterTxt      filter results by text
-     * @param isIgnoreCase   should ignore case in text filtering?
-     * @param orderBy        order elements by a property
-     * @param orderDir       order direction
-     * @return terminal nodes and scores
-     */
-    @Procedure(value = "findNodesWithMostPathBetweenTable", mode = Mode.WRITE)
-    @Description("Find nodes that has more path with given start node")
-    public Stream<ScoreOutput> findNodesWithMostPathBetweenTable(@Name("elementIds") List<String> elementIds,
-            @Name("ignoredTypes") List<String> ignoredTypes, @Name("terminalNodes") List<String> terminalNodes,
-            @Name("weightProperty") String weightProperty,
-            @Name("lengthLimit") long lengthLimit, @Name("nodeLimit") long nodeLimit,
-            @Name("isDirected") boolean isDirected,
-            @Name("pageSize") long pageSize, @Name("currPage") long currPage, @Name("filterTxt") String filterTxt,
-            @Name("isIgnoreCase") boolean isIgnoreCase,
-            @Name("orderBy") String orderBy, @Name("orderDir") long orderDir,
-            @Name("timeMapping") Map<String, List<String>> timeMapping, @Name("startTime") long startTime,
-            @Name("endTime") long endTime, @Name("inclusionType") long inclusionType,
-            @Name("timeout") long timeout, @Name("idFilter") List<String> idFilter) throws Exception {
-
-        long executionStarted = System.nanoTime();
-        TimeChecker timeChecker = new TimeChecker(timeout);
-        ScoreOutput o1 = findNodesWithMostPathBetweenDFS(elementIds, weightProperty, lengthLimit, nodeLimit,
-                    terminalNodes, ignoredTypes,
-                    timeChecker, startTime, endTime, timeMapping, inclusionType).tableOutput;
-        this.endMeasuringTime("Find Nodes With More Pathst", executionStarted);
-        executionStarted = System.nanoTime();
-        this.endMeasuringTime("Filter by date", executionStarted);
-        return Stream.of(o1);
-    }
+  
 
     /**
      * Since result could be big, gives results page by page
@@ -1139,7 +1100,6 @@ public class AdvancedQuery {
             Map<String, List<String>> timeMapping, long inclusionType) throws Exception {
 
         BFSOutput resultGraph = new BFSOutput(new HashSet<String>(), new HashSet<String>());
-        ScoreOutput resultTable = new ScoreOutput(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
         Map<String, Pair<List<List<String>>, List<Double>, List<List<String>>>> pathsAndScores = calculatePaths(sources,
                 elementIds,
                 lengthLimit, ignoredTypes, weightProperty, startTime, endTime, inclusionType, timeMapping);
@@ -1170,8 +1130,7 @@ public class AdvancedQuery {
             }
         }
 
-        resultTable = convertToScoreOutput(resultTableInitial);
-        FMPOutput result = new FMPOutput(resultTable, resultGraph);
+        FMPOutput result  = convertToScoreOutput(resultTableInitial, resultGraph);
         return result;
     }
 
@@ -1294,7 +1253,9 @@ public class AdvancedQuery {
         public long totalNodeCount;
         public List<String> nodeClass;
         public List<String> nodeElementId;
-
+        public List<String> elementId;
+        public List<String> name;
+        public List<Double> score;
         public List<Relationship> edges;
         public List<String> edgeClass;
         public List<String> edgeElementId;
@@ -1308,6 +1269,9 @@ public class AdvancedQuery {
             this.nodeElementId = new ArrayList<>();
             this.edgeElementId = new ArrayList<>();
             this.edgeSourceTargets = new ArrayList<>();
+            this.elementId = new ArrayList<>();
+            this.name = new ArrayList<>();
+            this.score = new ArrayList<>();            
         }
     }
 
@@ -1370,26 +1334,42 @@ public class AdvancedQuery {
 
     }
 
-    public static class FMPOutput {
+    public static class FMPOutputOld {
         public ScoreOutput tableOutput;
         public BFSOutput graphOutput;
 
-        FMPOutput(ScoreOutput tableOutput, BFSOutput graphOutput) {
+        FMPOutputOld(ScoreOutput tableOutput, BFSOutput graphOutput) {
             this.tableOutput = tableOutput;
             this.graphOutput = graphOutput;
         }
     }
 
-    public ScoreOutput convertToScoreOutput(List<Pair2<String, Double>> result) {
+    public static class FMPOutput {
+        public List<String> elementId;
+        public List<String> name;
+        public List<Double> score;
+        public HashSet<String> nodes;
+        public HashSet<String> edges;
+
+        FMPOutput(List<String> elementId, List<String> name, List<Double> score, HashSet<String> nodes, HashSet<String> edges) {
+            this.elementId = elementId;
+            this.name = name;
+            this.score = score;
+            this.nodes = nodes;
+            this.edges = edges;
+        }
+    }
+    public FMPOutput convertToScoreOutput(List<Pair2<String, Double>> result, BFSOutput graphResult) {
         List<String> elementIdList = new ArrayList<>();
         List<String> nameList = new ArrayList<>();
         List<Double> scoreList = new ArrayList<>();
+
         for (Pair2<String, Double> pair : result) {
             elementIdList.add(pair.first);
             nameList.add(this.getNodeByElementId(pair.first).getProperty("name", "").toString()); // Assuming the 'name'                                                                                 // result map
             scoreList.add(pair.second);
         }
-        return new ScoreOutput(elementIdList, nameList, scoreList);
+        return new FMPOutput(elementIdList, nameList, scoreList, graphResult.nodes, graphResult.edges);
     }
 
     public static class LabelData {
